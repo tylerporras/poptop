@@ -1,0 +1,215 @@
+╔══════════════════════════════════════════════════════════════════╗
+║         TELTONIKA VEHICLE TRACKER - FILE GUIDE                   ║
+╚══════════════════════════════════════════════════════════════════╝
+
+📁 PROJECT FILES
+═══════════════════════════════════════════════════════════════════
+
+START HERE - ESSENTIAL FILES
+─────────────────────────────────────────────────────────────────
+
+  📄 PROJECT_OVERVIEW.md ⭐ START HERE!
+     └─ Complete project introduction
+     └─ What you built and how it works
+     └─ Step-by-step next actions
+  
+  📄 QUICK_START.md ⭐ QUICK SETUP
+     └─ Fast setup instructions
+     └─ Installation steps
+     └─ Troubleshooting tips
+  
+  🚀 start.sh ⭐ ONE-COMMAND START
+     └─ Run this to start everything
+     └─ Usage: ./start.sh
+     └─ Checks dependencies and launches API
+
+
+MAIN APPLICATION FILES
+─────────────────────────────────────────────────────────────────
+
+  🌐 dashboard.html ⭐ MAIN DASHBOARD
+     └─ Open this in your browser
+     └─ Interactive map interface
+     └─ Real-time vehicle tracking
+     └─ Trip history and analysis
+     └─ Requires api_server.py running
+  
+  🔧 api_server.py ⭐ BACKEND API
+     └─ Must run this first!
+     └─ Usage: python api_server.py
+     └─ Serves data from DynamoDB
+     └─ REST endpoints for dashboard
+  
+  ⚡ lambda_function_final.py ⭐ DEPLOYED IN AWS
+     └─ Already running in AWS Lambda
+     └─ Decodes Teltonika binary data
+     └─ No action needed (already deployed)
+
+
+DOCUMENTATION
+─────────────────────────────────────────────────────────────────
+
+  📖 README.md
+     └─ Complete project documentation
+     └─ API reference
+     └─ Configuration options
+     └─ Feature descriptions
+  
+  🏗️ ARCHITECTURE.md
+     └─ System design and data flow
+     └─ Component descriptions
+     └─ Performance metrics
+     └─ Security considerations
+
+
+CONFIGURATION & SETUP
+─────────────────────────────────────────────────────────────────
+
+  📦 requirements.txt
+     └─ Python dependencies
+     └─ Install: pip install -r requirements.txt
+     └─ Flask, boto3, flask-cors
+
+
+HELPER/DEBUG FILES
+─────────────────────────────────────────────────────────────────
+
+  🐛 debug_event_structure.py
+     └─ Debug IoT Core events
+     └─ Analyze message structure
+  
+  🔍 analyze_event.py
+     └─ Analyze incoming data
+     └─ Test payload parsing
+  
+  🎨 teltonika_dashboard.html
+     └─ Demo version with mock data
+     └─ No API server needed
+     └─ For testing UI only
+
+
+LEGACY/BACKUP FILES (Reference Only)
+─────────────────────────────────────────────────────────────────
+
+  lambda_function.py
+  lambda_function_updated.py
+     └─ Previous versions
+     └─ Kept for reference
+     └─ Use lambda_function_final.py instead
+
+
+═══════════════════════════════════════════════════════════════════
+HOW TO GET STARTED (3 STEPS)
+═══════════════════════════════════════════════════════════════════
+
+STEP 1: Install Dependencies
+────────────────────────────
+  $ pip install -r requirements.txt
+
+STEP 2: Start API Server
+────────────────────────────
+  $ python api_server.py
+  
+  (Leave this running in a terminal)
+
+STEP 3: Open Dashboard
+────────────────────────────
+  Open dashboard.html in your web browser
+  
+  Or use a local server:
+  $ python -m http.server 8000
+  
+  Then visit: http://localhost:8000/dashboard.html
+
+
+═══════════════════════════════════════════════════════════════════
+QUICK REFERENCE
+═══════════════════════════════════════════════════════════════════
+
+Want to...                        Open this file...
+─────────────────────────────────────────────────────────────────
+Get started quickly              → QUICK_START.md
+Understand the whole project     → PROJECT_OVERVIEW.md
+See the dashboard                → dashboard.html
+Start the backend                → Run: python api_server.py
+Read full docs                   → README.md
+Understand architecture          → ARCHITECTURE.md
+Debug issues                     → debug_event_structure.py
+Install dependencies             → requirements.txt
+Start everything at once         → Run: ./start.sh
+
+
+═══════════════════════════════════════════════════════════════════
+FILE PURPOSES AT A GLANCE
+═══════════════════════════════════════════════════════════════════
+
+Production Files (Use These):
+  ✓ dashboard.html              - Main UI
+  ✓ api_server.py               - Backend
+  ✓ lambda_function_final.py    - AWS Lambda
+  ✓ start.sh                    - Startup script
+  ✓ requirements.txt            - Dependencies
+
+Documentation (Read These):
+  ✓ PROJECT_OVERVIEW.md         - Start here!
+  ✓ QUICK_START.md              - Quick setup
+  ✓ README.md                   - Full docs
+  ✓ ARCHITECTURE.md             - Technical details
+
+Development/Debug (Optional):
+  ○ teltonika_dashboard.html    - Demo/test UI
+  ○ debug_event_structure.py    - Debug tool
+  ○ analyze_event.py            - Analysis tool
+
+Legacy (Ignore These):
+  ○ lambda_function.py          - Old version
+  ○ lambda_function_updated.py  - Old version
+
+
+═══════════════════════════════════════════════════════════════════
+TYPICAL WORKFLOW
+═══════════════════════════════════════════════════════════════════
+
+Daily Use:
+  1. Run: python api_server.py
+  2. Open: dashboard.html
+  3. View your vehicle location and trips!
+
+First Time Setup:
+  1. Read: PROJECT_OVERVIEW.md
+  2. Read: QUICK_START.md
+  3. Run: pip install -r requirements.txt
+  4. Run: ./start.sh
+  5. Open: dashboard.html
+
+Troubleshooting:
+  1. Check: api_server.py is running
+  2. Check: AWS credentials configured
+  3. Check: DynamoDB has data
+  4. Read: README.md troubleshooting section
+
+Development:
+  1. Modify: dashboard.html (for UI changes)
+  2. Modify: api_server.py (for backend logic)
+  3. Test: teltonika_dashboard.html (mock data)
+  4. Deploy: lambda_function_final.py (to AWS)
+
+
+═══════════════════════════════════════════════════════════════════
+RECOMMENDED READING ORDER
+═══════════════════════════════════════════════════════════════════
+
+  1. 📄 This file (FILE_GUIDE.txt)
+  2. 📄 PROJECT_OVERVIEW.md
+  3. 📄 QUICK_START.md
+  4. 🚀 Run: ./start.sh
+  5. 🌐 Open: dashboard.html
+  6. 📄 README.md (if you need more details)
+
+
+═══════════════════════════════════════════════════════════════════
+
+🎉 You're ready to start tracking!
+
+Questions? Check PROJECT_OVERVIEW.md or README.md
+
