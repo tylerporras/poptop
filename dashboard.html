@@ -1,0 +1,517 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Teltonika Vehicle Tracker Dashboard</title>
+    <script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+    <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        .leaflet-container {
+            height: 100%;
+            width: 100%;
+            border-radius: 0.5rem;
+        }
+    </style>
+</head>
+<body class="bg-gray-100">
+    <div id="root"></div>
+
+    <script type="text/babel">
+        const { useState, useEffect, useRef } = React;
+
+        // Configuration - Update this with your API endpoint
+        const API_BASE_URL = 'http://localhost:5000/api';  // Change to your server URL
+        const DEFAULT_IMEI = '862464068525406';
+
+        const VehicleTrackerDashboard = () => {
+            const [data, setData] = useState([]);
+            const [selectedTrip, setSelectedTrip] = useState(null);
+            const [currentData, setCurrentData] = useState(null);
+            const [trips, setTrips] = useState([]);
+            const [stats, setStats] = useState(null);
+            const [autoRefresh, setAutoRefresh] = useState(true);
+            const [loading, setLoading] = useState(true);
+            const [error, setError] = useState(null);
+            const [imei, setImei] = useState(DEFAULT_IMEI);
+            const mapRef = useRef(null);
+            const mapInstanceRef = useRef(null);
+            const markersRef = useRef([]);
+
+            // Load data from API
+            useEffect(() => {
+                loadAllData();
+                
+                if (autoRefresh) {
+                    const interval = setInterval(loadAllData, 5000); // Refresh every 5 seconds
+                    return () => clearInterval(interval);
+                }
+            }, [autoRefresh, imei]);
+
+            const loadAllData = async () => {
+                try {
+                    setError(null);
+                    
+                    // Load latest data
+                    const latestRes = await fetch(`${API_BASE_URL}/latest?imei=${imei}`);
+                    if (latestRes.ok) {
+                        const latestData = await latestRes.json();
+                        setCurrentData(latestData.data);
+                    }
+                    
+                    // Load trips
+                    const tripsRes = await fetch(`${API_BASE_URL}/trips?imei=${imei}&hours=168`);
+                    if (tripsRes.ok) {
+                        const tripsData = await tripsRes.json();
+                        setTrips(tripsData.trips || []);
+                    }
+                    
+                    // Load stats
+                    const statsRes = await fetch(`${API_BASE_URL}/stats?imei=${imei}&hours=168`);
+                    if (statsRes.ok) {
+                        const statsData = await statsRes.json();
+                        setStats(statsData);
+                    }
+                    
+                    setLoading(false);
+                    
+                } catch (err) {
+                    console.error('Error loading data:', err);
+                    setError(err.message);
+                    setLoading(false);
+                }
+            };
+
+            const calculateDistance = (lat1, lon1, lat2, lon2) => {
+                const R = 6371;
+                const dLat = (lat2 - lat1) * Math.PI / 180;
+                const dLon = (lon2 - lon1) * Math.PI / 180;
+                const a = 
+                    Math.sin(dLat/2) * Math.sin(dLat/2) +
+                    Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) *
+                    Math.sin(dLon/2) * Math.sin(dLon/2);
+                const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
+                return R * c;
+            };
+
+            // Initialize map
+            useEffect(() => {
+                if (mapRef.current && !mapInstanceRef.current) {
+                    mapInstanceRef.current = L.map(mapRef.current).setView([38.54963, -121.4792916], 13);
+                    
+                    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+                        attribution: '© OpenStreetMap contributors',
+                        maxZoom: 19
+                    }).addTo(mapInstanceRef.current);
+                }
+            }, []);
+
+            // Update map with data
+            useEffect(() => {
+                if (!mapInstanceRef.current) return;
+
+                // Clear existing markers and polylines
+                markersRef.current.forEach(marker => marker.remove());
+                markersRef.current = [];
+
+                const map = mapInstanceRef.current;
+
+                if (selectedTrip) {
+                    // Show selected trip
+                    const trip = selectedTrip;
+                    const coords = trip.points.map(p => [p.gps.latitude, p.gps.longitude]);
+                    
+                    // Draw route
+                    const polyline = L.polyline(coords, { 
+                        color: '#3b82f6', 
+                        weight: 4,
+                        opacity: 0.7
+                    }).addTo(map);
+                    markersRef.current.push(polyline);
+                    
+                    // Add start marker
+                    const startMarker = L.marker([trip.start_location.latitude, trip.start_location.longitude], {
+                        icon: L.divIcon({
+                            className: 'custom-div-icon',
+                            html: "<div style='background-color:#22c55e;width:24px;height:24px;border-radius:50%;border:3px solid white;box-shadow: 0 2px 4px rgba(0,0,0,0.3);'></div>",
+                            iconSize: [24, 24]
+                        })
+                    }).addTo(map).bindPopup(`
+                        <div style="font-family: sans-serif;">
+                            <strong>Trip Start</strong><br/>
+                            ${trip.start_datetime}<br/>
+                            Speed: ${trip.points[0].gps.speed_kmh.toFixed(1)} km/h
+                        </div>
+                    `);
+                    markersRef.current.push(startMarker);
+                    
+                    // Add end marker if trip is complete
+                    if (trip.end_location) {
+                        const endMarker = L.marker([trip.end_location.latitude, trip.end_location.longitude], {
+                            icon: L.divIcon({
+                                className: 'custom-div-icon',
+                                html: "<div style='background-color:#ef4444;width:24px;height:24px;border-radius:50%;border:3px solid white;box-shadow: 0 2px 4px rgba(0,0,0,0.3);'></div>",
+                                iconSize: [24, 24]
+                            })
+                        }).addTo(map).bindPopup(`
+                            <div style="font-family: sans-serif;">
+                                <strong>Trip End</strong><br/>
+                                ${trip.end_datetime || 'Ongoing'}<br/>
+                                ${trip.ongoing ? 'Trip in progress' : 'Trip completed'}
+                            </div>
+                        `);
+                        markersRef.current.push(endMarker);
+                    }
+                    
+                    // Fit map to route
+                    if (coords.length > 0) {
+                        map.fitBounds(polyline.getBounds(), { padding: [50, 50] });
+                    }
+                    
+                } else if (currentData) {
+                    // Show current location
+                    const lat = currentData.gps.latitude;
+                    const lon = currentData.gps.longitude;
+                    
+                    const ignitionOn = currentData.io.ignition?.value === 1;
+                    const markerColor = ignitionOn ? '#22c55e' : '#ef4444';
+                    
+                    const marker = L.marker([lat, lon], {
+                        icon: L.divIcon({
+                            className: 'custom-div-icon',
+                            html: `<div style='background-color:${markerColor};width:28px;height:28px;border-radius:50%;border:4px solid white;box-shadow:0 2px 6px rgba(0,0,0,0.4);'></div>`,
+                            iconSize: [28, 28]
+                        })
+                    }).addTo(map).bindPopup(`
+                        <div style="font-family: sans-serif;">
+                            <strong>Current Location</strong><br/>
+                            <div style="margin-top: 8px;">
+                                <strong>Speed:</strong> ${currentData.gps.speed_kmh.toFixed(1)} km/h<br/>
+                                <strong>Altitude:</strong> ${currentData.gps.altitude} m<br/>
+                                <strong>Satellites:</strong> ${currentData.gps.satellites}<br/>
+                                <strong>Ignition:</strong> ${ignitionOn ? '🟢 ON' : '🔴 OFF'}<br/>
+                                <strong>Time:</strong> ${new Date(currentData.timestamp).toLocaleString()}
+                            </div>
+                        </div>
+                    `);
+                    markersRef.current.push(marker);
+                    marker.openPopup();
+                    
+                    map.setView([lat, lon], 15);
+                }
+            }, [currentData, selectedTrip]);
+
+            const formatDuration = (ms) => {
+                const seconds = Math.floor(ms / 1000);
+                const minutes = Math.floor(seconds / 60);
+                const hours = Math.floor(minutes / 60);
+                const days = Math.floor(hours / 24);
+                
+                if (days > 0) {
+                    return `${days}d ${hours % 24}h ${minutes % 60}m`;
+                } else if (hours > 0) {
+                    return `${hours}h ${minutes % 60}m`;
+                } else if (minutes > 0) {
+                    return `${minutes}m ${seconds % 60}s`;
+                } else {
+                    return `${seconds}s`;
+                }
+            };
+
+            const formatDate = (timestamp) => {
+                return new Date(timestamp).toLocaleString();
+            };
+
+            if (loading) {
+                return (
+                    <div className="min-h-screen bg-gray-100 flex items-center justify-center">
+                        <div className="text-center">
+                            <div className="text-4xl mb-4">🚗</div>
+                            <div className="text-xl font-semibold text-gray-700">Loading tracker data...</div>
+                            <div className="text-sm text-gray-500 mt-2">Connecting to API server</div>
+                        </div>
+                    </div>
+                );
+            }
+
+            if (error && !currentData) {
+                return (
+                    <div className="min-h-screen bg-gray-100 flex items-center justify-center">
+                        <div className="bg-white rounded-lg shadow-md p-8 max-w-md">
+                            <div className="text-red-500 text-4xl mb-4">⚠️</div>
+                            <h2 className="text-xl font-bold text-gray-800 mb-2">Connection Error</h2>
+                            <p className="text-gray-600 mb-4">{error}</p>
+                            <p className="text-sm text-gray-500 mb-4">
+                                Make sure the API server is running at:<br/>
+                                <code className="bg-gray-100 px-2 py-1 rounded">{API_BASE_URL}</code>
+                            </p>
+                            <button
+                                onClick={loadAllData}
+                                className="px-4 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600 transition"
+                            >
+                                Retry Connection
+                            </button>
+                        </div>
+                    </div>
+                );
+            }
+
+            return (
+                <div className="min-h-screen bg-gray-100 p-4">
+                    {/* Header */}
+                    <div className="bg-white rounded-lg shadow-md p-6 mb-4">
+                        <div className="flex justify-between items-center">
+                            <div>
+                                <h1 className="text-3xl font-bold text-gray-800">🚗 Vehicle Tracker Dashboard</h1>
+                                <p className="text-gray-600">IMEI: {imei}</p>
+                                {stats && (
+                                    <p className="text-sm text-gray-500 mt-1">
+                                        Last 7 days: {stats.total_records} records · {stats.total_distance_km.toFixed(1)} km · Max {stats.max_speed_kmh.toFixed(0)} km/h
+                                    </p>
+                                )}
+                            </div>
+                            <div className="flex items-center gap-4">
+                                <label className="flex items-center gap-2 cursor-pointer">
+                                    <input
+                                        type="checkbox"
+                                        checked={autoRefresh}
+                                        onChange={(e) => setAutoRefresh(e.target.checked)}
+                                        className="w-4 h-4"
+                                    />
+                                    <span className="text-sm text-gray-700">Auto-refresh (5s)</span>
+                                </label>
+                                <button
+                                    onClick={loadAllData}
+                                    className="px-4 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600 transition"
+                                >
+                                    🔄 Refresh
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
+                        {/* Left Column - Map and Current Status */}
+                        <div className="lg:col-span-2 space-y-4">
+                            {/* Map */}
+                            <div className="bg-white rounded-lg shadow-md p-4">
+                                <h2 className="text-xl font-semibold mb-4 text-gray-800">
+                                    {selectedTrip ? `📍 Trip #${selectedTrip.id}` : '📍 Current Location'}
+                                </h2>
+                                <div ref={mapRef} style={{ height: '500px' }}></div>
+                                {selectedTrip && (
+                                    <button
+                                        onClick={() => setSelectedTrip(null)}
+                                        className="mt-4 px-4 py-2 bg-gray-500 text-white rounded-lg hover:bg-gray-600 transition"
+                                    >
+                                        ← Back to Current Location
+                                    </button>
+                                )}
+                            </div>
+
+                            {/* Current Status */}
+                            {currentData && !selectedTrip && (
+                                <div className="bg-white rounded-lg shadow-md p-6">
+                                    <h2 className="text-xl font-semibold mb-4 text-gray-800">📊 Current Status</h2>
+                                    
+                                    <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                                        <div className="bg-gradient-to-br from-blue-50 to-blue-100 p-4 rounded-lg border border-blue-200">
+                                            <div className="text-gray-600 text-sm font-medium">Speed</div>
+                                            <div className="text-3xl font-bold text-blue-600">
+                                                {currentData.gps.speed_kmh.toFixed(0)}
+                                                <span className="text-sm text-gray-600 ml-1">km/h</span>
+                                            </div>
+                                        </div>
+                                        
+                                        <div className={`p-4 rounded-lg border ${
+                                            currentData.io.ignition?.value ? 'bg-gradient-to-br from-green-50 to-green-100 border-green-200' : 'bg-gradient-to-br from-red-50 to-red-100 border-red-200'
+                                        }`}>
+                                            <div className="text-gray-600 text-sm font-medium">Ignition</div>
+                                            <div className={`text-3xl font-bold ${currentData.io.ignition?.value ? 'text-green-600' : 'text-red-600'}`}>
+                                                {currentData.io.ignition?.value ? '🟢 ON' : '🔴 OFF'}
+                                            </div>
+                                        </div>
+                                        
+                                        <div className="bg-gradient-to-br from-purple-50 to-purple-100 p-4 rounded-lg border border-purple-200">
+                                            <div className="text-gray-600 text-sm font-medium">GPS Sats</div>
+                                            <div className="text-3xl font-bold text-purple-600">
+                                                🛰️ {currentData.gps.satellites}
+                                            </div>
+                                        </div>
+                                        
+                                        <div className="bg-gradient-to-br from-orange-50 to-orange-100 p-4 rounded-lg border border-orange-200">
+                                            <div className="text-gray-600 text-sm font-medium">GSM Signal</div>
+                                            <div className="text-3xl font-bold text-orange-600">
+                                                📶 {currentData.io.gsm_signal?.value || 0}/5
+                                            </div>
+                                        </div>
+                                        
+                                        <div className="bg-gray-50 p-4 rounded-lg border border-gray-200">
+                                            <div className="text-gray-600 text-sm">External Voltage</div>
+                                            <div className="text-xl font-bold text-gray-800">
+                                                {((currentData.io.external_voltage?.value || 0) / 1000).toFixed(2)} V
+                                            </div>
+                                        </div>
+                                        
+                                        <div className="bg-gray-50 p-4 rounded-lg border border-gray-200">
+                                            <div className="text-gray-600 text-sm">Battery</div>
+                                            <div className="text-xl font-bold text-gray-800">
+                                                {((currentData.io.battery_voltage?.value || 0) / 1000).toFixed(2)} V
+                                            </div>
+                                        </div>
+                                        
+                                        <div className="bg-gray-50 p-4 rounded-lg border border-gray-200">
+                                            <div className="text-gray-600 text-sm">Altitude</div>
+                                            <div className="text-xl font-bold text-gray-800">
+                                                {currentData.gps.altitude} m
+                                            </div>
+                                        </div>
+                                        
+                                        <div className="bg-gray-50 p-4 rounded-lg border border-gray-200">
+                                            <div className="text-gray-600 text-sm">Total Distance</div>
+                                            <div className="text-xl font-bold text-gray-800">
+                                                {((currentData.io.total_odometer?.value || 0) / 1000).toFixed(1)} km
+                                            </div>
+                                        </div>
+                                    </div>
+                                    
+                                    <div className="mt-4 text-sm text-gray-600 flex justify-between items-center">
+                                        <span>📅 {formatDate(currentData.timestamp)}</span>
+                                        <span className="text-xs bg-gray-100 px-2 py-1 rounded">
+                                            📍 {currentData.gps.latitude.toFixed(6)}, {currentData.gps.longitude.toFixed(6)}
+                                        </span>
+                                    </div>
+                                </div>
+                            )}
+
+                            {/* Selected Trip Details */}
+                            {selectedTrip && (
+                                <div className="bg-white rounded-lg shadow-md p-6">
+                                    <h2 className="text-xl font-semibold mb-4 text-gray-800">🚗 Trip Details</h2>
+                                    
+                                    <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
+                                        <div className="bg-green-50 p-4 rounded-lg border border-green-200">
+                                            <div className="text-gray-600 text-sm">Start Time</div>
+                                            <div className="text-sm font-semibold text-gray-800">
+                                                {formatDate(selectedTrip.start_time)}
+                                            </div>
+                                        </div>
+                                        
+                                        <div className="bg-red-50 p-4 rounded-lg border border-red-200">
+                                            <div className="text-gray-600 text-sm">End Time</div>
+                                            <div className="text-sm font-semibold text-gray-800">
+                                                {selectedTrip.ongoing ? '⏱️ Ongoing' : formatDate(selectedTrip.end_time)}
+                                            </div>
+                                        </div>
+                                        
+                                        <div className="bg-blue-50 p-4 rounded-lg border border-blue-200">
+                                            <div className="text-gray-600 text-sm">Duration</div>
+                                            <div className="text-lg font-bold text-blue-600">
+                                                ⏱️ {formatDuration(selectedTrip.duration_ms)}
+                                            </div>
+                                        </div>
+                                        
+                                        <div className="bg-purple-50 p-4 rounded-lg border border-purple-200">
+                                            <div className="text-gray-600 text-sm">Distance</div>
+                                            <div className="text-lg font-bold text-purple-600">
+                                                📏 {selectedTrip.distance.toFixed(2)} km
+                                            </div>
+                                        </div>
+                                        
+                                        <div className="bg-orange-50 p-4 rounded-lg border border-orange-200">
+                                            <div className="text-gray-600 text-sm">Max Speed</div>
+                                            <div className="text-lg font-bold text-orange-600">
+                                                🚀 {selectedTrip.max_speed.toFixed(0)} km/h
+                                            </div>
+                                        </div>
+                                        
+                                        <div className="bg-yellow-50 p-4 rounded-lg border border-yellow-200">
+                                            <div className="text-gray-600 text-sm">Avg Speed</div>
+                                            <div className="text-lg font-bold text-yellow-600">
+                                                📊 {(selectedTrip.avg_speed || 0).toFixed(0)} km/h
+                                            </div>
+                                        </div>
+                                    </div>
+                                    
+                                    <div className="mt-4 p-4 bg-gray-50 rounded-lg">
+                                        <div className="text-sm text-gray-600">
+                                            <strong>Data Points:</strong> {selectedTrip.points.length} records
+                                        </div>
+                                    </div>
+                                </div>
+                            )}
+                        </div>
+
+                        {/* Right Column - Trip History */}
+                        <div className="space-y-4">
+                            <div className="bg-white rounded-lg shadow-md p-6">
+                                <h2 className="text-xl font-semibold mb-4 text-gray-800">📋 Trip History</h2>
+                                
+                                {trips.length === 0 ? (
+                                    <div className="text-center text-gray-500 py-8">
+                                        <div className="text-4xl mb-2">🚗</div>
+                                        <div className="font-medium">No trips recorded yet</div>
+                                        <div className="text-sm mt-2">Turn on the ignition to start tracking!</div>
+                                    </div>
+                                ) : (
+                                    <div className="space-y-3 max-h-[800px] overflow-y-auto pr-2">
+                                        {trips.map((trip) => (
+                                            <div
+                                                key={trip.id}
+                                                onClick={() => setSelectedTrip(trip)}
+                                                className={`p-4 rounded-lg border-2 cursor-pointer transition ${
+                                                    selectedTrip?.id === trip.id
+                                                        ? 'border-blue-500 bg-blue-50 shadow-md'
+                                                        : 'border-gray-200 hover:border-blue-300 bg-white hover:shadow'
+                                                }`}
+                                            >
+                                                <div className="flex justify-between items-start mb-2">
+                                                    <div className="font-semibold text-gray-800">
+                                                        🚗 Trip #{trip.id}
+                                                    </div>
+                                                    {trip.ongoing && (
+                                                        <span className="px-2 py-1 text-xs bg-green-100 text-green-800 rounded font-medium">
+                                                            ⏱️ Live
+                                                        </span>
+                                                    )}
+                                                </div>
+                                                
+                                                <div className="text-sm text-gray-600 space-y-1">
+                                                    <div>
+                                                        📅 {new Date(trip.start_time).toLocaleDateString()}
+                                                    </div>
+                                                    <div>
+                                                        🕐 {new Date(trip.start_time).toLocaleTimeString()}
+                                                    </div>
+                                                    <div>
+                                                        ⏱️ {formatDuration(trip.duration_ms)}
+                                                    </div>
+                                                    <div>
+                                                        📍 {trip.distance.toFixed(2)} km
+                                                    </div>
+                                                    <div>
+                                                        🚀 Max: {trip.max_speed.toFixed(0)} km/h
+                                                    </div>
+                                                    <div>
+                                                        📊 Avg: {(trip.avg_speed || 0).toFixed(0)} km/h
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        ))}
+                                    </div>
+                                )}
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            );
+        };
+
+        ReactDOM.render(<VehicleTrackerDashboard />, document.getElementById('root'));
+    </script>
+</body>
+</html>
