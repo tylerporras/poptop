@@ -1,0 +1,473 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>BMW Live Telemetry Dashboard</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+    <style>
+        @keyframes pulse-green {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.5; }
+        }
+        .pulse-green {
+            animation: pulse-green 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+        }
+        #map {
+            height: 400px;
+            border-radius: 0.5rem;
+        }
+    </style>
+</head>
+<body class="bg-gray-900 text-gray-100">
+    <div class="max-w-7xl mx-auto p-4 md:p-6">
+        <!-- Header -->
+        <div class="mb-6">
+            <div class="flex items-center justify-between flex-wrap gap-4">
+                <div>
+                    <h1 class="text-3xl md:text-4xl font-bold text-white mb-2">BMW Live Telemetry</h1>
+                    <p class="text-gray-400 text-sm md:text-base">Real-time vehicle monitoring</p>
+                </div>
+                <div class="flex items-center gap-4">
+                    <div class="flex items-center gap-2">
+                        <div id="liveIndicator" class="w-3 h-3 bg-green-500 rounded-full pulse-green"></div>
+                        <span class="text-green-400 font-semibold">LIVE</span>
+                    </div>
+                    <button id="refreshBtn" onclick="fetchLatestData()" 
+                            class="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg font-semibold transition">
+                        Refresh
+                    </button>
+                </div>
+            </div>
+            <div class="mt-2 text-sm text-gray-500">
+                Last updated: <span id="lastUpdate" class="text-gray-400">-</span> • 
+                Auto-refresh: <span class="text-green-400">5 seconds</span>
+            </div>
+        </div>
+
+        <!-- Map -->
+        <div class="bg-gray-800 rounded-lg shadow-lg p-4 md:p-6 mb-6 border border-gray-700">
+            <h3 class="text-xl font-semibold text-white mb-4">Current Location</h3>
+            <div id="map"></div>
+            <div class="mt-4 flex flex-wrap gap-2">
+                <button onclick="centerMap()" class="px-3 py-1 bg-blue-600 hover:bg-blue-700 text-white rounded text-sm">
+                    Center Map
+                </button>
+                <a id="googleMapsLink" href="#" target="_blank" 
+                   class="px-3 py-1 bg-green-600 hover:bg-green-700 text-white rounded text-sm">
+                    Open in Google Maps
+                </a>
+            </div>
+        </div>
+
+        <!-- Trip Stats -->
+        <div class="bg-gradient-to-br from-purple-900 to-purple-800 rounded-lg shadow-2xl p-4 md:p-6 mb-6 border border-purple-700">
+            <div class="flex items-center justify-between mb-4">
+                <h2 class="text-xl md:text-2xl font-bold text-white">Current Trip</h2>
+                <svg class="w-8 h-8 md:w-10 md:h-10 text-purple-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 20l-5.447-2.724A1 1 0 013 16.382V5.618a1 1 0 011.447-.894L9 7m0 13l6-3m-6 3V7m6 10l4.553 2.276A1 1 0 0021 18.382V7.618a1 1 0 00-.553-.894L15 4m0 13V4m0 0L9 7"></path>
+                </svg>
+            </div>
+            <div class="grid grid-cols-2 md:grid-cols-4 gap-4">
+                <div>
+                    <p class="text-purple-200 text-sm mb-1">Trip Distance</p>
+                    <p id="tripDistance" class="text-2xl md:text-3xl font-bold text-white">0.0 km</p>
+                </div>
+                <div>
+                    <p class="text-purple-200 text-sm mb-1">Total Odometer</p>
+                    <p id="totalOdometer" class="text-2xl md:text-3xl font-bold text-white">- km</p>
+                </div>
+                <div>
+                    <p class="text-purple-200 text-sm mb-1">Trip Duration</p>
+                    <p id="tripDuration" class="text-2xl md:text-3xl font-bold text-white">0:00</p>
+                </div>
+                <div>
+                    <p class="text-purple-200 text-sm mb-1">Avg Speed</p>
+                    <p id="avgSpeed" class="text-2xl md:text-3xl font-bold text-white">0 km/h</p>
+                </div>
+            </div>
+        </div>
+
+        <!-- Vehicle Info -->
+        <div class="bg-gradient-to-br from-blue-900 to-blue-800 rounded-lg shadow-2xl p-4 md:p-6 mb-6 border border-blue-700">
+            <h2 class="text-xl md:text-2xl font-bold text-white mb-4">Vehicle Information</h2>
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div>
+                    <p class="text-blue-200 text-sm mb-1">VIN</p>
+                    <p id="vin" class="text-lg md:text-2xl font-mono font-bold text-white">-</p>
+                </div>
+                <div>
+                    <p class="text-blue-200 text-sm mb-1">IMEI</p>
+                    <p id="imei" class="text-lg md:text-xl font-mono text-white">862464068525406</p>
+                </div>
+            </div>
+        </div>
+
+        <!-- Status Grid -->
+        <div class="grid grid-cols-1 md:grid-cols-3 gap-4 md:gap-6 mb-6">
+            <!-- Speed -->
+            <div class="bg-gray-800 rounded-lg shadow-lg p-4 md:p-6 border border-gray-700">
+                <div class="flex items-center justify-between mb-4">
+                    <h3 class="text-lg font-semibold text-white">Speed</h3>
+                    <svg class="w-8 h-8 text-blue-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"></path>
+                    </svg>
+                </div>
+                <div>
+                    <p id="speed" class="text-4xl md:text-5xl font-bold text-white mb-1">0</p>
+                    <p class="text-gray-400 text-base md:text-lg">km/h</p>
+                    <div class="mt-2">
+                        <span id="movementStatus" class="px-3 py-1 bg-yellow-900 text-yellow-300 rounded-full text-xs md:text-sm font-semibold">PARKED</span>
+                    </div>
+                </div>
+            </div>
+
+            <!-- GPS Status -->
+            <div class="bg-gray-800 rounded-lg shadow-lg p-4 md:p-6 border border-gray-700">
+                <div class="flex items-center justify-between mb-4">
+                    <h3 class="text-lg font-semibold text-white">GPS Status</h3>
+                    <svg class="w-8 h-8 text-green-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z"></path>
+                    </svg>
+                </div>
+                <div>
+                    <p class="text-gray-400 text-sm mb-1">Satellites</p>
+                    <p id="satellites" class="text-3xl md:text-4xl font-bold text-green-400 mb-2">-</p>
+                    <div class="flex items-center gap-2">
+                        <div class="flex-1 bg-gray-700 rounded-full h-2">
+                            <div id="gpsQuality" class="bg-green-500 h-2 rounded-full" style="width: 0%"></div>
+                        </div>
+                        <span id="gpsQualityText" class="text-sm text-gray-400">-</span>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Ignition -->
+            <div class="bg-gray-800 rounded-lg shadow-lg p-4 md:p-6 border border-gray-700">
+                <div class="flex items-center justify-between mb-4">
+                    <h3 class="text-lg font-semibold text-white">Ignition</h3>
+                    <svg id="ignitionIcon" class="w-8 h-8 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 7a2 2 0 012 2m4 0a6 6 0 01-7.743 5.743L11 17H9v2H7v2H4a1 1 0 01-1-1v-2.586a1 1 0 01.293-.707l5.964-5.964A6 6 0 1121 9z"></path>
+                    </svg>
+                </div>
+                <div>
+                    <p id="ignitionStatus" class="text-3xl md:text-4xl font-bold text-gray-400 mb-2">OFF</p>
+                    <p class="text-sm text-gray-500">Engine status</p>
+                </div>
+            </div>
+        </div>
+
+        <!-- Sensor Details -->
+        <div class="bg-gray-800 rounded-lg shadow-lg p-4 md:p-6 mb-6 border border-gray-700">
+            <h3 class="text-xl font-semibold text-white mb-4">Vehicle Sensors</h3>
+            <div class="grid grid-cols-2 md:grid-cols-4 gap-4">
+                <div class="bg-gray-900 rounded-lg p-3 border border-gray-700">
+                    <p class="text-gray-400 text-xs md:text-sm mb-1">GSM Signal</p>
+                    <p id="gsmSignal" class="text-xl md:text-2xl font-bold text-green-400">-</p>
+                </div>
+                <div class="bg-gray-900 rounded-lg p-3 border border-gray-700">
+                    <p class="text-gray-400 text-xs md:text-sm mb-1">Ext. Voltage</p>
+                    <p id="extVoltage" class="text-xl md:text-2xl font-bold text-blue-400">- V</p>
+                </div>
+                <div class="bg-gray-900 rounded-lg p-3 border border-gray-700">
+                    <p class="text-gray-400 text-xs md:text-sm mb-1">Altitude</p>
+                    <p id="altitude" class="text-xl md:text-2xl font-bold text-purple-400">- m</p>
+                </div>
+                <div class="bg-gray-900 rounded-lg p-3 border border-gray-700">
+                    <p class="text-gray-400 text-xs md:text-sm mb-1">Heading</p>
+                    <p id="heading" class="text-xl md:text-2xl font-bold text-yellow-400">-</p>
+                </div>
+            </div>
+        </div>
+
+        <!-- Connection Status -->
+        <div class="bg-gray-800 rounded-lg shadow-lg p-4 md:p-6 mb-6 border border-gray-700">
+            <h3 class="text-xl font-semibold text-white mb-4">Connection Details</h3>
+            <div class="grid grid-cols-1 md:grid-cols-3 gap-4 text-sm">
+                <div class="flex justify-between items-center">
+                    <span class="text-gray-400">IMSI</span>
+                    <span id="imsi" class="font-mono text-white">-</span>
+                </div>
+                <div class="flex justify-between items-center">
+                    <span class="text-gray-400">Operator</span>
+                    <span id="operator" class="font-mono text-white">-</span>
+                </div>
+                <div class="flex justify-between items-center">
+                    <span class="text-gray-400">Codec</span>
+                    <span id="codec" class="font-semibold text-green-400">-</span>
+                </div>
+            </div>
+        </div>
+
+        <!-- Error Display -->
+        <div id="errorMessage" class="hidden bg-red-900 border border-red-700 rounded-lg p-4 mb-6">
+            <div class="flex items-center gap-2">
+                <svg class="w-5 h-5 text-red-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+                </svg>
+                <span id="errorText" class="text-red-200"></span>
+            </div>
+        </div>
+
+        <!-- Footer -->
+        <div class="mt-8 text-center text-gray-500 text-xs md:text-sm">
+            <p>Teltonika FMM00A • Soracom • AWS IoT • Railway API</p>
+        </div>
+    </div>
+
+    <script>
+        // Configuration
+        const API_BASE_URL = 'https://poptop-production.up.railway.app/api';
+        const DEFAULT_IMEI = '862464068525406';
+        const REFRESH_INTERVAL = 5000; // 5 seconds
+
+        // State
+        let map, marker, tripStartOdometer = null, tripStartTime = null;
+        let currentData = null;
+        let refreshTimer = null;
+
+        // Initialize map
+        function initMap() {
+            map = L.map('map').setView([38.5498649, -121.47948], 13);
+            L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+                attribution: '© OpenStreetMap contributors',
+                maxZoom: 19
+            }).addTo(map);
+            
+            marker = L.marker([38.5498649, -121.47948]).addTo(map);
+        }
+
+        // Fetch latest telemetry data
+        async function fetchLatestData() {
+            try {
+                showError('');
+                document.getElementById('refreshBtn').disabled = true;
+                
+                const response = await fetch(`${API_BASE_URL}/latest/${DEFAULT_IMEI}`);
+                
+                if (!response.ok) {
+                    throw new Error(`API error: ${response.status}`);
+                }
+                
+                const result = await response.json();
+                
+                if (!result.data || !result.data.gps) {
+                    throw new Error('No GPS data available');
+                }
+                
+                currentData = result;
+                updateDashboard(result);
+                updateLastUpdateTime();
+                
+            } catch (error) {
+                console.error('Error fetching data:', error);
+                showError(`Connection error: ${error.message}`);
+                setLiveIndicator(false);
+            } finally {
+                document.getElementById('refreshBtn').disabled = false;
+            }
+        }
+
+        // Update dashboard with new data
+        function updateDashboard(result) {
+            const data = result.data;
+            const gps = data.gps;
+            const io = data.io;
+            
+            // Update live indicator
+            setLiveIndicator(true);
+            
+            // Update VIN
+            document.getElementById('vin').textContent = result.vin || 'WBAEP33485PF04957';
+            document.getElementById('imei').textContent = result.imei;
+            
+            // Update GPS
+            if (gps && gps.valid) {
+                const lat = gps.latitude;
+                const lng = gps.longitude;
+                
+                // Update map
+                marker.setLatLng([lat, lng]);
+                map.setView([lat, lng], map.getZoom());
+                
+                // Update Google Maps link
+                document.getElementById('googleMapsLink').href = 
+                    `https://www.google.com/maps?q=${lat},${lng}`;
+                
+                // Update satellites
+                const sats = gps.satellites || 0;
+                document.getElementById('satellites').textContent = sats;
+                
+                const quality = Math.min(100, (sats / 12) * 100);
+                document.getElementById('gpsQuality').style.width = quality + '%';
+                
+                let qualityText = 'Poor';
+                if (sats >= 10) qualityText = 'Excellent';
+                else if (sats >= 7) qualityText = 'Good';
+                else if (sats >= 4) qualityText = 'Fair';
+                document.getElementById('gpsQualityText').textContent = qualityText;
+                
+                // Update altitude
+                document.getElementById('altitude').textContent = 
+                    (gps.altitude || 0).toFixed(0);
+                
+                // Update heading
+                const angle = gps.angle || 0;
+                const directions = ['N', 'NE', 'E', 'SE', 'S', 'SW', 'W', 'NW'];
+                const dir = directions[Math.round(angle / 45) % 8];
+                document.getElementById('heading').textContent = `${angle}° ${dir}`;
+            }
+            
+            // Update speed
+            const speed = gps.speed_kmh || 0;
+            document.getElementById('speed').textContent = speed.toFixed(0);
+            
+            if (speed > 5) {
+                document.getElementById('movementStatus').textContent = 'MOVING';
+                document.getElementById('movementStatus').className = 
+                    'px-3 py-1 bg-green-900 text-green-300 rounded-full text-xs md:text-sm font-semibold';
+            } else {
+                document.getElementById('movementStatus').textContent = 'PARKED';
+                document.getElementById('movementStatus').className = 
+                    'px-3 py-1 bg-yellow-900 text-yellow-300 rounded-full text-xs md:text-sm font-semibold';
+            }
+            
+            // Update ignition
+            const ignition = io?.ignition?.value || 0;
+            const ignitionOn = ignition === 1;
+            
+            document.getElementById('ignitionStatus').textContent = ignitionOn ? 'ON' : 'OFF';
+            document.getElementById('ignitionStatus').className = 
+                `text-3xl md:text-4xl font-bold mb-2 ${ignitionOn ? 'text-green-400' : 'text-gray-400'}`;
+            document.getElementById('ignitionIcon').className = 
+                `w-8 h-8 ${ignitionOn ? 'text-green-400' : 'text-gray-400'}`;
+            
+            // Trip calculations
+            const tripOdometer = io?.trip_odometer?.value || 0;
+            const totalOdometer = io?.total_odometer?.value || 0;
+            
+            // Initialize trip start when ignition turns on
+            if (ignitionOn && tripStartOdometer === null) {
+                tripStartOdometer = tripOdometer;
+                tripStartTime = data.timestamp;
+            }
+            
+            // Reset trip when ignition turns off
+            if (!ignitionOn) {
+                tripStartOdometer = null;
+                tripStartTime = null;
+            }
+            
+            // Calculate trip distance
+            const tripDistance = tripStartOdometer !== null 
+                ? ((tripOdometer - tripStartOdometer) / 1000).toFixed(1)
+                : (tripOdometer / 1000).toFixed(1);
+            
+            document.getElementById('tripDistance').textContent = tripDistance + ' km';
+            document.getElementById('totalOdometer').textContent = 
+                totalOdometer ? (totalOdometer / 1000).toFixed(1) + ' km' : '- km';
+            
+            // Calculate trip duration
+            if (tripStartTime && ignitionOn) {
+                const duration = data.timestamp - tripStartTime;
+                const minutes = Math.floor(duration / 60000);
+                const hours = Math.floor(minutes / 60);
+                const mins = minutes % 60;
+                document.getElementById('tripDuration').textContent = 
+                    `${hours}:${mins.toString().padStart(2, '0')}`;
+                
+                // Calculate average speed (only if moving)
+                if (parseFloat(tripDistance) > 0.1) {
+                    const avgSpeed = (parseFloat(tripDistance) / (duration / 3600000)).toFixed(1);
+                    document.getElementById('avgSpeed').textContent = avgSpeed + ' km/h';
+                } else {
+                    document.getElementById('avgSpeed').textContent = '0 km/h';
+                }
+            } else {
+                document.getElementById('tripDuration').textContent = '0:00';
+                document.getElementById('avgSpeed').textContent = '0 km/h';
+            }
+            
+            // Update sensors
+            document.getElementById('gsmSignal').textContent = io?.gsm_signal?.value || '-';
+            
+            const extVoltage = io?.external_voltage?.value;
+            document.getElementById('extVoltage').textContent = extVoltage 
+                ? (extVoltage / 1000).toFixed(2) + ' V'
+                : '- V';
+            
+            // Update connection info
+            document.getElementById('imsi').textContent = result.imsi || '-';
+            document.getElementById('operator').textContent = result.operatorId || '-';
+            document.getElementById('codec').textContent = 
+                result.codec_id === 142 ? '8E (Extended)' : 
+                result.codec_id === 8 ? '8 (Standard)' : '-';
+        }
+
+        function centerMap() {
+            if (currentData && currentData.data.gps) {
+                const gps = currentData.data.gps;
+                map.setView([gps.latitude, gps.longitude], 15);
+            }
+        }
+
+        function setLiveIndicator(isLive) {
+            const indicator = document.getElementById('liveIndicator');
+            if (isLive) {
+                indicator.className = 'w-3 h-3 bg-green-500 rounded-full pulse-green';
+            } else {
+                indicator.className = 'w-3 h-3 bg-red-500 rounded-full';
+            }
+        }
+
+        function showError(message) {
+            const errorDiv = document.getElementById('errorMessage');
+            const errorText = document.getElementById('errorText');
+            
+            if (message) {
+                errorText.textContent = message;
+                errorDiv.classList.remove('hidden');
+            } else {
+                errorDiv.classList.add('hidden');
+            }
+        }
+
+        function updateLastUpdateTime() {
+            const now = new Date();
+            document.getElementById('lastUpdate').textContent = 
+                now.toLocaleTimeString('en-US', { hour12: false });
+        }
+
+        // Auto-refresh
+        function startAutoRefresh() {
+            refreshTimer = setInterval(fetchLatestData, REFRESH_INTERVAL);
+        }
+
+        function stopAutoRefresh() {
+            if (refreshTimer) {
+                clearInterval(refreshTimer);
+                refreshTimer = null;
+            }
+        }
+
+        // Initialize on load
+        window.addEventListener('load', () => {
+            initMap();
+            fetchLatestData();
+            startAutoRefresh();
+        });
+
+        // Stop refresh when page hidden (battery saving)
+        document.addEventListener('visibilitychange', () => {
+            if (document.hidden) {
+                stopAutoRefresh();
+            } else {
+                startAutoRefresh();
+                fetchLatestData();
+            }
+        });
+    </script>
+</body>
+</html>
