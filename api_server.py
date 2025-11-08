@@ -163,11 +163,22 @@ def get_latest_data(imei):
         records = json.loads(item.get('records', '[]'))
         latest_record = records[0] if records else {}
         
+        # Get VIN and convert to string (may be stored as number due to Lambda issue)
+        vin_raw = item.get('vin')
+        if vin_raw and vin_raw != 'Unknown':
+            vin = str(vin_raw)
+            # Validate VIN format (should be 17 chars, start with letter)
+            if len(vin) != 17 or not vin[0].isalpha():
+                print(f"Warning: Invalid VIN in DynamoDB: {vin} (type: {type(vin_raw)})")
+                vin = 'Unknown - Check Lambda'
+        else:
+            vin = 'Unknown'
+        
         # Convert Decimal to int/float
         result = {
             'imei': item.get('imei'),
             'timestamp': int(item.get('timestamp', 0)),
-            'vin': item.get('vin'),
+            'vin': vin,
             'data': decimal_to_number(latest_record)
         }
         
@@ -205,8 +216,26 @@ def get_trips(imei):
             return jsonify({'count': 0, 'trips': [], 'imei': imei})
         
         # Get VIN from first record (should be same for all)
-        vin = items[0].get('vin', 'Unknown')
-        vehicle_info = decode_vin(str(vin)) if vin and vin != 'Unknown' else {}
+        # Handle VIN as string or number (Lambda issue from earlier)
+        vin_raw = items[0].get('vin', 'Unknown')
+        
+        # Convert to string and validate
+        if vin_raw and vin_raw != 'Unknown':
+            vin = str(vin_raw)
+            # If VIN is a number (old Lambda issue), mark as unknown
+            # Valid VIN should be 17 characters
+            if len(vin) != 17 or not vin[0].isalpha():
+                print(f"Warning: Invalid VIN format: {vin} (type: {type(vin_raw)})")
+                vin = 'Unknown'
+        else:
+            vin = 'Unknown'
+            
+        vehicle_info = decode_vin(vin) if vin != 'Unknown' else {
+            'make': 'Unknown',
+            'model': 'Unknown', 
+            'year': 'Unknown',
+            'country': 'Unknown'
+        }
         
         # Process records and group into trips
         trips = []
