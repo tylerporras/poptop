@@ -181,12 +181,15 @@ def get_trips(imei):
                     if records:
                         record = records[0]
                         ignition = record.get('io', {}).get('ignition', {}).get('value', 0)
+                        io = record.get('io', {})
+                        trip_odo = io.get('trip_odometer', {}).get('value', 0)
                         
                         if ignition == 1:  # Ignition ON
                             if current_trip is None:
                                 # Start new trip
                                 current_trip = {
                                     'start_time': item['timestamp'],
+                                    'start_odometer': trip_odo,
                                     'points': [],
                                     'max_speed': 0,
                                     'total_distance': 0
@@ -199,15 +202,20 @@ def get_trips(imei):
                             current_trip['points'].append({
                                 'timestamp': item['timestamp'],
                                 'gps': gps,
-                                'speed': speed
+                                'speed': speed,
+                                'odometer': trip_odo
                             })
                             
                             current_trip['max_speed'] = max(current_trip['max_speed'], speed)
                             current_trip['end_time'] = item['timestamp']
+                            current_trip['end_odometer'] = trip_odo
                             
                         elif current_trip is not None:  # Ignition OFF
                             # End current trip
                             duration_ms = current_trip['end_time'] - current_trip['start_time']
+                            
+                            # Calculate distance from odometer (more accurate than GPS)
+                            distance_meters = current_trip['end_odometer'] - current_trip['start_odometer']
                             
                             # Calculate average speed
                             speeds = [p['speed'] for p in current_trip['points']]
@@ -216,6 +224,14 @@ def get_trips(imei):
                             current_trip['duration_ms'] = duration_ms
                             current_trip['avg_speed'] = round(avg_speed, 1)
                             current_trip['num_points'] = len(current_trip['points'])
+                            current_trip['total_distance'] = distance_meters
+                            
+                            # Remove points to reduce response size (keep first and last)
+                            if len(current_trip['points']) > 2:
+                                current_trip['points'] = [
+                                    current_trip['points'][0],
+                                    current_trip['points'][-1]
+                                ]
                             
                             trips.append(current_trip)
                             current_trip = None
@@ -227,13 +243,25 @@ def get_trips(imei):
         # Add current trip if still ongoing
         if current_trip is not None:
             duration_ms = current_trip['end_time'] - current_trip['start_time']
+            
+            # Calculate distance from odometer
+            distance_meters = current_trip.get('end_odometer', 0) - current_trip.get('start_odometer', 0)
+            
             speeds = [p['speed'] for p in current_trip['points']]
             avg_speed = sum(speeds) / len(speeds) if speeds else 0
             
             current_trip['duration_ms'] = duration_ms
             current_trip['avg_speed'] = round(avg_speed, 1)
             current_trip['num_points'] = len(current_trip['points'])
+            current_trip['total_distance'] = distance_meters
             current_trip['ongoing'] = True
+            
+            # Keep only first and last points to reduce size
+            if len(current_trip['points']) > 2:
+                current_trip['points'] = [
+                    current_trip['points'][0],
+                    current_trip['points'][-1]
+                ]
             
             trips.append(current_trip)
         
