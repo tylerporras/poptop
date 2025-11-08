@@ -73,11 +73,11 @@
             <div class="grid grid-cols-2 md:grid-cols-4 gap-4">
                 <div>
                     <p class="text-purple-200 text-sm mb-1">Trip Distance</p>
-                    <p id="tripDistance" class="text-2xl md:text-3xl font-bold text-white">0.0 km</p>
+                    <p id="tripDistance" class="text-2xl md:text-3xl font-bold text-white">0.0 mi</p>
                 </div>
                 <div>
                     <p class="text-purple-200 text-sm mb-1">Total Odometer</p>
-                    <p id="totalOdometer" class="text-2xl md:text-3xl font-bold text-white">- km</p>
+                    <p id="totalOdometer" class="text-2xl md:text-3xl font-bold text-white">- mi</p>
                 </div>
                 <div>
                     <p class="text-purple-200 text-sm mb-1">Trip Duration</p>
@@ -85,7 +85,7 @@
                 </div>
                 <div>
                     <p class="text-purple-200 text-sm mb-1">Avg Speed</p>
-                    <p id="avgSpeed" class="text-2xl md:text-3xl font-bold text-white">0 km/h</p>
+                    <p id="avgSpeed" class="text-2xl md:text-3xl font-bold text-white">0 mph</p>
                 </div>
             </div>
         </div>
@@ -117,7 +117,7 @@
                 </div>
                 <div>
                     <p id="speed" class="text-4xl md:text-5xl font-bold text-white mb-1">0</p>
-                    <p class="text-gray-400 text-base md:text-lg">km/h</p>
+                    <p class="text-gray-400 text-base md:text-lg">mph</p>
                     <div class="mt-2">
                         <span id="movementStatus" class="px-3 py-1 bg-yellow-900 text-yellow-300 rounded-full text-xs md:text-sm font-semibold">PARKED</span>
                     </div>
@@ -223,6 +223,15 @@
         const DEFAULT_IMEI = '862464068525406';
         const REFRESH_INTERVAL = 5000; // 5 seconds
 
+        // Conversion helpers
+        function kmToMiles(km) {
+            return km * 0.621371;
+        }
+
+        function metersToMiles(meters) {
+            return (meters / 1000) * 0.621371;
+        }
+
         // State
         let map, marker, tripStartOdometer = null, tripStartTime = null;
         let currentData = null;
@@ -320,11 +329,12 @@
                 document.getElementById('heading').textContent = `${angle}° ${dir}`;
             }
             
-            // Update speed
-            const speed = gps.speed_kmh || 0;
-            document.getElementById('speed').textContent = speed.toFixed(0);
+            // Update speed (convert to mph)
+            const speedKmh = gps.speed_kmh || 0;
+            const speedMph = kmToMiles(speedKmh);
+            document.getElementById('speed').textContent = speedMph.toFixed(0);
             
-            if (speed > 5) {
+            if (speedMph > 3) {  // 3 mph threshold
                 document.getElementById('movementStatus').textContent = 'MOVING';
                 document.getElementById('movementStatus').className = 
                     'px-3 py-1 bg-green-900 text-green-300 rounded-full text-xs md:text-sm font-semibold';
@@ -360,14 +370,17 @@
                 tripStartTime = null;
             }
             
-            // Calculate trip distance
+            // Calculate trip distance (convert to miles)
             const tripDistance = tripStartOdometer !== null 
                 ? ((tripOdometer - tripStartOdometer) / 1000).toFixed(1)
                 : (tripOdometer / 1000).toFixed(1);
             
-            document.getElementById('tripDistance').textContent = tripDistance + ' km';
+            const tripDistanceMiles = kmToMiles(parseFloat(tripDistance));
+            document.getElementById('tripDistance').textContent = tripDistanceMiles.toFixed(1) + ' mi';
+            
+            const totalOdometerMiles = totalOdometer ? metersToMiles(totalOdometer).toFixed(1) : '-';
             document.getElementById('totalOdometer').textContent = 
-                totalOdometer ? (totalOdometer / 1000).toFixed(1) + ' km' : '- km';
+                totalOdometer ? totalOdometerMiles + ' mi' : '- mi';
             
             // Calculate trip duration
             if (tripStartTime && ignitionOn) {
@@ -378,16 +391,16 @@
                 document.getElementById('tripDuration').textContent = 
                     `${hours}:${mins.toString().padStart(2, '0')}`;
                 
-                // Calculate average speed (only if moving)
-                if (parseFloat(tripDistance) > 0.1) {
-                    const avgSpeed = (parseFloat(tripDistance) / (duration / 3600000)).toFixed(1);
-                    document.getElementById('avgSpeed').textContent = avgSpeed + ' km/h';
+                // Calculate average speed in mph
+                if (tripDistanceMiles > 0.1) {
+                    const avgSpeedMph = (tripDistanceMiles / (duration / 3600000)).toFixed(1);
+                    document.getElementById('avgSpeed').textContent = avgSpeedMph + ' mph';
                 } else {
-                    document.getElementById('avgSpeed').textContent = '0 km/h';
+                    document.getElementById('avgSpeed').textContent = '0 mph';
                 }
             } else {
                 document.getElementById('tripDuration').textContent = '0:00';
-                document.getElementById('avgSpeed').textContent = '0 km/h';
+                document.getElementById('avgSpeed').textContent = '0 mph';
             }
             
             // Update sensors
