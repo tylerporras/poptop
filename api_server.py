@@ -221,10 +221,15 @@ def get_trips(imei):
                             speeds = [p['speed'] for p in current_trip['points']]
                             avg_speed = sum(speeds) / len(speeds) if speeds else 0
                             
-                            current_trip['duration_ms'] = duration_ms
-                            current_trip['avg_speed'] = round(avg_speed, 1)
-                            current_trip['num_points'] = len(current_trip['points'])
-                            current_trip['total_distance'] = distance_meters
+                            current_trip['duration_ms'] = int(duration_ms)
+                            current_trip['avg_speed'] = round(float(avg_speed), 1)
+                            current_trip['num_points'] = int(len(current_trip['points']))
+                            current_trip['total_distance'] = int(distance_meters)
+                            current_trip['start_odometer'] = int(current_trip.get('start_odometer', 0))
+                            current_trip['end_odometer'] = int(current_trip.get('end_odometer', 0))
+                            current_trip['start_time'] = int(current_trip['start_time'])
+                            current_trip['end_time'] = int(current_trip['end_time'])
+                            current_trip['max_speed'] = round(float(current_trip['max_speed']), 1)
                             
                             # Remove points to reduce response size (keep first and last)
                             if len(current_trip['points']) > 2:
@@ -250,10 +255,15 @@ def get_trips(imei):
             speeds = [p['speed'] for p in current_trip['points']]
             avg_speed = sum(speeds) / len(speeds) if speeds else 0
             
-            current_trip['duration_ms'] = duration_ms
-            current_trip['avg_speed'] = round(avg_speed, 1)
-            current_trip['num_points'] = len(current_trip['points'])
-            current_trip['total_distance'] = distance_meters
+            current_trip['duration_ms'] = int(duration_ms)
+            current_trip['avg_speed'] = round(float(avg_speed), 1)
+            current_trip['num_points'] = int(len(current_trip['points']))
+            current_trip['total_distance'] = int(distance_meters)
+            current_trip['start_odometer'] = int(current_trip.get('start_odometer', 0))
+            current_trip['end_odometer'] = int(current_trip.get('end_odometer', 0))
+            current_trip['start_time'] = int(current_trip['start_time'])
+            current_trip['end_time'] = int(current_trip['end_time'])
+            current_trip['max_speed'] = round(float(current_trip['max_speed']), 1)
             current_trip['ongoing'] = True
             
             # Keep only first and last points to reduce size

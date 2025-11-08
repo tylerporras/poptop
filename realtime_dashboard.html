@@ -298,6 +298,9 @@
         }
 
         function formatDuration(ms) {
+            // Handle string or number
+            ms = parseInt(ms) || 0;
+            if (ms < 0) return '0h 0m';
             const minutes = Math.floor(ms / 60000);
             const hours = Math.floor(minutes / 60);
             const mins = minutes % 60;
@@ -305,7 +308,44 @@
         }
 
         function formatDateTime(timestamp) {
+            // Handle invalid timestamps
+            if (!timestamp) return 'Invalid Date';
+            
+            // Convert string to number if needed
+            timestamp = parseInt(timestamp);
+            if (isNaN(timestamp) || timestamp <= 0) return 'Invalid Date';
+            
+            // Convert to milliseconds if in seconds
+            if (timestamp < 10000000000) {
+                timestamp = timestamp * 1000;
+            }
+            
             const date = new Date(timestamp);
+            
+            // Check if date is valid
+            if (isNaN(date.getTime())) {
+                return 'Invalid Date';
+            }
+            
+            return date.toLocaleString('en-US', {
+                month: 'short',
+                day: 'numeric',
+                year: 'numeric',
+                hour: '2-digit',
+                minute: '2-digit',
+                hour12: true
+            });
+        }
+        
+        function formatDateShort(timestamp) {
+            if (!timestamp) return 'Invalid';
+            timestamp = parseInt(timestamp);
+            if (isNaN(timestamp) || timestamp <= 0) return 'Invalid';
+            if (timestamp < 10000000000) timestamp = timestamp * 1000;
+            
+            const date = new Date(timestamp);
+            if (isNaN(date.getTime())) return 'Invalid';
+            
             return date.toLocaleString('en-US', {
                 month: 'short',
                 day: 'numeric',
@@ -336,14 +376,28 @@
             const hours = document.getElementById('tripPeriod').value;
             
             try {
+                document.getElementById('tripsLoading').classList.remove('hidden');
+                document.getElementById('noTrips').classList.add('hidden');
+                document.getElementById('tripsList').innerHTML = '';
+                
+                console.log(`Fetching trips for last ${hours} hours...`);
+                
                 const response = await fetch(`${API_BASE_URL}/trips/${DEFAULT_IMEI}?hours=${hours}`);
                 
                 if (!response.ok) {
-                    throw new Error(`API error: ${response.status}`);
+                    throw new Error(`API error: ${response.status} ${response.statusText}`);
                 }
                 
                 const result = await response.json();
+                console.log('Trips API response:', result);
+                
                 tripsData = result.trips || [];
+                console.log(`Found ${tripsData.length} trips`);
+                
+                // Debug: Log first trip if exists
+                if (tripsData.length > 0) {
+                    console.log('Sample trip:', tripsData[0]);
+                }
                 
                 updateTripsDisplay();
                 
@@ -351,14 +405,24 @@
                 console.error('Error fetching trips:', error);
                 document.getElementById('tripsLoading').classList.add('hidden');
                 document.getElementById('noTrips').classList.remove('hidden');
+                
+                // Show error in UI
+                const noTripsDiv = document.getElementById('noTrips');
+                noTripsDiv.innerHTML = `
+                    <svg class="w-16 h-16 mx-auto text-red-600 mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+                    </svg>
+                    <p class="text-red-400 font-semibold">Error Loading Trips</p>
+                    <p class="text-gray-500 text-sm mt-2">${error.message}</p>
+                    <button onclick="fetchTrips()" class="mt-4 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded text-sm">
+                        Try Again
+                    </button>
+                `;
             }
         }
 
         // Change trip period and reload
         function changeTripPeriod() {
-            document.getElementById('tripsLoading').classList.remove('hidden');
-            document.getElementById('tripsList').innerHTML = '';
-            document.getElementById('noTrips').classList.add('hidden');
             fetchTrips();
         }
 
@@ -382,20 +446,35 @@
             tripCount.textContent = `${tripsData.length} trip${tripsData.length !== 1 ? 's' : ''}`;
             
             // Sort trips by start time (newest first)
-            const sortedTrips = [...tripsData].sort((a, b) => b.start_time - a.start_time);
+            const sortedTrips = [...tripsData].sort((a, b) => {
+                const timeA = a.start_time || 0;
+                const timeB = b.start_time || 0;
+                return timeB - timeA;
+            });
             
             tripsList.innerHTML = sortedTrips.map((trip, index) => {
-                const distance = trip.total_distance || 0;
-                const distanceMiles = metersToMiles(distance).toFixed(1);
-                const maxSpeedMph = kmToMiles(trip.max_speed || 0).toFixed(1);
-                const avgSpeedMph = kmToMiles(trip.avg_speed || 0).toFixed(1);
+                // Validate and format distance (handle string or number)
+                const distance = parseFloat(trip.total_distance) || 0;
+                const distanceMiles = distance > 0 ? metersToMiles(distance).toFixed(1) : '0.0';
+                
+                // Validate and format speeds (handle string or number)
+                const maxSpeed = parseFloat(trip.max_speed) || 0;
+                const avgSpeed = parseFloat(trip.avg_speed) || 0;
+                const maxSpeedMph = maxSpeed > 0 ? kmToMiles(maxSpeed).toFixed(1) : '0.0';
+                const avgSpeedMph = avgSpeed > 0 ? kmToMiles(avgSpeed).toFixed(1) : '0.0';
+                
+                // Format duration
                 const duration = formatDuration(trip.duration_ms || 0);
-                const startTime = formatDateTime(trip.start_time);
-                const endTime = trip.end_time ? formatDateTime(trip.end_time) : 'Ongoing';
+                
+                // Format times with validation
+                const startTime = formatDateShort(trip.start_time);
+                const endTime = trip.end_time ? formatDateShort(trip.end_time) : 'Ongoing';
                 const isOngoing = trip.ongoing || false;
                 
+                // Create trip card
                 return `
-                    <div class="trip-card bg-gray-900 border border-gray-700 rounded-lg p-4 hover:border-blue-500 cursor-pointer">
+                    <div class="trip-card bg-gray-900 border border-gray-700 rounded-lg p-4 hover:border-blue-500 cursor-pointer"
+                         onclick='showTripDetails(${JSON.stringify(trip).replace(/'/g, "&apos;")})'>
                         <div class="flex items-start justify-between mb-3">
                             <div class="flex items-center gap-2">
                                 <div class="w-10 h-10 rounded-full bg-blue-900 flex items-center justify-center">
@@ -406,33 +485,42 @@
                                     <p class="text-gray-500 text-sm">to ${endTime}</p>
                                 </div>
                             </div>
-                            ${isOngoing ? '<span class="px-2 py-1 bg-green-900 text-green-300 rounded text-xs font-semibold">ONGOING</span>' : ''}
+                            ${isOngoing ? '<span class="px-2 py-1 bg-green-900 text-green-300 rounded text-xs font-semibold animate-pulse">ONGOING</span>' : ''}
                         </div>
                         
                         <div class="grid grid-cols-2 md:grid-cols-4 gap-3 mt-3">
                             <div>
                                 <p class="text-gray-500 text-xs mb-1">Distance</p>
-                                <p class="text-white font-bold">${distanceMiles} mi</p>
+                                <p class="text-white font-bold text-lg">${distanceMiles} mi</p>
                             </div>
                             <div>
                                 <p class="text-gray-500 text-xs mb-1">Duration</p>
-                                <p class="text-white font-bold">${duration}</p>
+                                <p class="text-white font-bold text-lg">${duration}</p>
                             </div>
                             <div>
                                 <p class="text-gray-500 text-xs mb-1">Max Speed</p>
-                                <p class="text-white font-bold">${maxSpeedMph} mph</p>
+                                <p class="text-white font-bold text-lg">${maxSpeedMph} mph</p>
                             </div>
                             <div>
                                 <p class="text-gray-500 text-xs mb-1">Avg Speed</p>
-                                <p class="text-white font-bold">${avgSpeedMph} mph</p>
+                                <p class="text-white font-bold text-lg">${avgSpeedMph} mph</p>
                             </div>
                         </div>
                         
-                        ${trip.num_points ? `<p class="text-gray-500 text-xs mt-2">${trip.num_points} data points</p>` : ''}
+                        <div class="mt-3 pt-3 border-t border-gray-800 flex justify-between items-center text-xs text-gray-500">
+                            <span>${trip.num_points || 0} data points</span>
+                            ${trip.start_time ? `<span>${new Date(trip.start_time < 10000000000 ? trip.start_time * 1000 : trip.start_time).toLocaleDateString()}</span>` : ''}
+                        </div>
                     </div>
                 `;
             }).join('');
             
+        }
+        
+        // Show trip details (for future enhancement)
+        function showTripDetails(trip) {
+            console.log('Trip details:', trip);
+            // TODO: Could add a modal with route map, detailed stats, etc.
         }
 
         // Toggle trips section
