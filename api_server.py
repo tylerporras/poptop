@@ -1,299 +1,323 @@
+#!/usr/bin/env python3
 """
-Flask API to serve Teltonika tracking data from DynamoDB
-This provides REST endpoints for the dashboard
+Flask API Server for Teltonika Telemetry Data
+Connects to DynamoDB and provides REST endpoints
 """
 
 from flask import Flask, jsonify, request
 from flask_cors import CORS
 import boto3
-from boto3.dynamodb.conditions import Key, Attr
+from boto3.dynamodb.conditions import Key
 from decimal import Decimal
 import json
 from datetime import datetime, timedelta
+import os
 
 app = Flask(__name__)
-CORS(app)  # Enable CORS for dashboard access
+
+# Enable CORS for GitHub Pages
+CORS(app, resources={
+    r"/api/*": {
+        "origins": [
+            "https://tylerporras.github.io",
+            "http://localhost:*",
+            "http://127.0.0.1:*"
+        ]
+    }
+})
+
+# AWS Configuration
+AWS_REGION = os.environ.get('AWS_DEFAULT_REGION', 'us-west-1')
+TABLE_NAME = os.environ.get('DYNAMODB_TABLE', 'teltonika-events')
 
 # Initialize DynamoDB
-dynamodb = boto3.resource('dynamodb', region_name='us-west-1')
-table = dynamodb.Table('teltonika-events')
+try:
+    dynamodb = boto3.resource('dynamodb', region_name=AWS_REGION)
+    table = dynamodb.Table(TABLE_NAME)
+    print(f"✅ Connected to DynamoDB table: {TABLE_NAME} in region: {AWS_REGION}")
+except Exception as e:
+    print(f"❌ Error connecting to DynamoDB: {str(e)}")
+    print("Make sure AWS credentials are set in environment variables:")
+    print("  - AWS_ACCESS_KEY_ID")
+    print("  - AWS_SECRET_ACCESS_KEY")
+    print("  - AWS_DEFAULT_REGION")
 
+# Helper function to convert Decimal to float for JSON serialization
+def decimal_to_float(obj):
+    if isinstance(obj, Decimal):
+        return float(obj)
+    raise TypeError
+
+# Custom JSON encoder
 class DecimalEncoder(json.JSONEncoder):
-    """Helper to convert DynamoDB Decimal types to JSON"""
     def default(self, obj):
         if isinstance(obj, Decimal):
             return float(obj)
         return super(DecimalEncoder, self).default(obj)
 
+app.json_encoder = DecimalEncoder
+
 @app.route('/api/health', methods=['GET'])
 def health_check():
     """Health check endpoint"""
-    return jsonify({'status': 'ok', 'timestamp': datetime.now().isoformat()})
+    return jsonify({
+        'status': 'ok',
+        'timestamp': datetime.utcnow().isoformat(),
+        'table': TABLE_NAME,
+        'region': AWS_REGION
+    })
 
-@app.route('/api/latest', methods=['GET'])
-def get_latest():
-    """Get the latest data point for a device"""
-    imei = request.args.get('imei', '862464068525406')
-    
+@app.route('/api/latest/<imei>', methods=['GET'])
+def get_latest(imei):
+    """Get the latest telemetry data for a device"""
     try:
-        # Query the latest record for this IMEI
+        # Query DynamoDB for latest record
         response = table.query(
             KeyConditionExpression=Key('imei').eq(imei),
-            ScanIndexFilter=Attr('num_records').gt(0),
-            Limit=1,
-            ScanIndexForward=False  # Sort descending by timestamp
+            ScanIndexForward=False,  # Sort descending (newest first)
+            Limit=1
         )
         
-        if response['Items']:
-            item = response['Items'][0]
-            
-            # Parse the parsed_data JSON string
-            if 'parsed_data' in item:
-                parsed = json.loads(item['parsed_data'])
-                
-                # Get the latest record from the parsed data
-                if parsed.get('records'):
-                    latest_record = parsed['records'][-1]
-                    
-                    return jsonify({
-                        'imei': item['imei'],
-                        'timestamp': item['timestamp'],
-                        'received_at': item.get('received_at'),
-                        'data': latest_record
-                    })
+        if not response.get('Items'):
+            return jsonify({'error': 'No data found for device'}), 404
         
-        return jsonify({'error': 'No data found'}), 404
+        item = response['Items'][0]
         
-    except Exception as e:
-        return jsonify({'error': str(e)}), 500
-
-@app.route('/api/history', methods=['GET'])
-def get_history():
-    """Get historical data for a device"""
-    imei = request.args.get('imei', '862464068525406')
-    hours = int(request.args.get('hours', 24))
-    
-    try:
-        # Calculate timestamp for N hours ago
-        cutoff_time = int((datetime.now() - timedelta(hours=hours)).timestamp() * 1000)
-        
-        # Query data
-        response = table.query(
-            KeyConditionExpression=Key('imei').eq(imei) & Key('timestamp').gt(cutoff_time),
-            ScanIndexForward=True  # Sort ascending by timestamp
-        )
-        
+        # Parse records JSON if exists
         records = []
-        for item in response['Items']:
-            if 'parsed_data' in item:
-                parsed = json.loads(item['parsed_data'])
-                
-                # Extract all records from this item
-                if parsed.get('records'):
-                    for record in parsed['records']:
-                        records.append({
-                            'imei': item['imei'],
-                            'timestamp': record['timestamp'],
-                            'datetime': record['datetime'],
-                            'gps': record.get('gps', {}),
-                            'io': record.get('io', {}),
-                            'priority': record.get('priority', 0),
-                            'event_io_id': record.get('event_io_id', 0)
-                        })
+        if 'records' in item and item['records']:
+            try:
+                records = json.loads(item['records'])
+            except:
+                records = []
         
-        return jsonify({
-            'imei': imei,
-            'count': len(records),
-            'records': records
-        })
+        # Get the first record's data
+        data = {}
+        if records:
+            data = records[0]
+        
+        result = {
+            'imei': item.get('imei'),
+            'timestamp': int(item.get('timestamp', 0)),
+            'received_at': int(item.get('received_at', 0)),
+            'vin': item.get('vin', 'UNKNOWN'),
+            'imsi': item.get('imsi'),
+            'operatorId': item.get('operatorId'),
+            'codec_id': int(item.get('codec_id', 0)),
+            'num_records': int(item.get('num_records', 0)),
+            'data': data
+        }
+        
+        return jsonify(result)
         
     except Exception as e:
+        print(f"Error fetching latest data: {str(e)}")
         return jsonify({'error': str(e)}), 500
 
-@app.route('/api/trips', methods=['GET'])
-def get_trips():
-    """Get trip information (grouped by ignition cycles)"""
-    imei = request.args.get('imei', '862464068525406')
-    hours = int(request.args.get('hours', 168))  # Default 7 days
-    
+@app.route('/api/history/<imei>', methods=['GET'])
+def get_history(imei):
+    """Get historical data for a device"""
     try:
-        # Get historical data
-        cutoff_time = int((datetime.now() - timedelta(hours=hours)).timestamp() * 1000)
+        # Get query parameters
+        limit = int(request.args.get('limit', 100))
+        hours = int(request.args.get('hours', 24))
         
+        # Calculate timestamp cutoff
+        cutoff = int((datetime.utcnow() - timedelta(hours=hours)).timestamp() * 1000)
+        
+        # Query DynamoDB
         response = table.query(
-            KeyConditionExpression=Key('imei').eq(imei) & Key('timestamp').gt(cutoff_time),
-            ScanIndexForward=True
+            KeyConditionExpression=Key('imei').eq(imei) & Key('timestamp').gte(cutoff),
+            ScanIndexForward=False,  # Newest first
+            Limit=limit
         )
         
-        # Collect all records
-        all_records = []
-        for item in response['Items']:
-            if 'parsed_data' in item:
-                parsed = json.loads(item['parsed_data'])
-                if parsed.get('records'):
-                    for record in parsed['records']:
-                        all_records.append({
-                            'timestamp': record['timestamp'],
-                            'datetime': record['datetime'],
-                            'gps': record.get('gps', {}),
-                            'io': record.get('io', {}),
-                            'ignition': record.get('io', {}).get('ignition', {}).get('value', 0)
-                        })
+        items = response.get('Items', [])
         
-        # Sort by timestamp
-        all_records.sort(key=lambda x: x['timestamp'])
+        # Parse records for each item
+        for item in items:
+            if 'records' in item and item['records']:
+                try:
+                    item['records_parsed'] = json.loads(item['records'])
+                except:
+                    item['records_parsed'] = []
         
-        # Process trips based on ignition cycles
+        result = {
+            'imei': imei,
+            'count': len(items),
+            'hours': hours,
+            'records': items
+        }
+        
+        return jsonify(result)
+        
+    except Exception as e:
+        print(f"Error fetching history: {str(e)}")
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/api/trips/<imei>', methods=['GET'])
+def get_trips(imei):
+    """Get trip data grouped by ignition cycles"""
+    try:
+        # Get last 7 days of data
+        hours = int(request.args.get('hours', 168))  # 7 days default
+        cutoff = int((datetime.utcnow() - timedelta(hours=hours)).timestamp() * 1000)
+        
+        response = table.query(
+            KeyConditionExpression=Key('imei').eq(imei) & Key('timestamp').gte(cutoff),
+            ScanIndexForward=True  # Oldest first for trip analysis
+        )
+        
+        items = response.get('Items', [])
+        
+        # Group into trips based on ignition
         trips = []
         current_trip = None
         
-        for record in all_records:
-            ignition = record['ignition']
-            
-            if ignition == 1 and current_trip is None:
-                # Start new trip
-                current_trip = {
-                    'id': len(trips) + 1,
-                    'start_time': record['timestamp'],
-                    'start_datetime': record['datetime'],
-                    'end_time': None,
-                    'end_datetime': None,
-                    'start_location': record['gps'],
-                    'end_location': None,
-                    'points': [record],
-                    'max_speed': record['gps'].get('speed_kmh', 0),
-                    'distance': 0,
-                    'ongoing': True
-                }
-            elif ignition == 1 and current_trip is not None:
-                # Continue trip
-                current_trip['points'].append(record)
-                current_trip['end_time'] = record['timestamp']
-                current_trip['end_datetime'] = record['datetime']
-                current_trip['end_location'] = record['gps']
-                current_trip['max_speed'] = max(
-                    current_trip['max_speed'],
-                    record['gps'].get('speed_kmh', 0)
-                )
-                
-                # Calculate distance
-                if len(current_trip['points']) > 1:
-                    prev = current_trip['points'][-2]
-                    dist = calculate_distance(
-                        prev['gps'].get('latitude', 0),
-                        prev['gps'].get('longitude', 0),
-                        record['gps'].get('latitude', 0),
-                        record['gps'].get('longitude', 0)
-                    )
-                    current_trip['distance'] += dist
-                    
-            elif ignition == 0 and current_trip is not None:
-                # End trip
-                current_trip['ongoing'] = False
-                if not current_trip['end_time']:
-                    current_trip['end_time'] = current_trip['points'][-1]['timestamp']
-                    current_trip['end_datetime'] = current_trip['points'][-1]['datetime']
-                    current_trip['end_location'] = current_trip['points'][-1]['gps']
-                
-                # Calculate duration
-                current_trip['duration_ms'] = current_trip['end_time'] - current_trip['start_time']
-                
-                # Calculate average speed
-                if current_trip['duration_ms'] > 0:
-                    current_trip['avg_speed'] = (current_trip['distance'] / (current_trip['duration_ms'] / 1000)) * 3600
-                else:
-                    current_trip['avg_speed'] = 0
-                
-                trips.append(current_trip)
-                current_trip = None
+        for item in items:
+            if 'records' in item and item['records']:
+                try:
+                    records = json.loads(item['records'])
+                    if records:
+                        record = records[0]
+                        ignition = record.get('io', {}).get('ignition', {}).get('value', 0)
+                        
+                        if ignition == 1:  # Ignition ON
+                            if current_trip is None:
+                                # Start new trip
+                                current_trip = {
+                                    'start_time': item['timestamp'],
+                                    'points': [],
+                                    'max_speed': 0,
+                                    'total_distance': 0
+                                }
+                            
+                            # Add point to current trip
+                            gps = record.get('gps', {})
+                            speed = gps.get('speed_kmh', 0)
+                            
+                            current_trip['points'].append({
+                                'timestamp': item['timestamp'],
+                                'gps': gps,
+                                'speed': speed
+                            })
+                            
+                            current_trip['max_speed'] = max(current_trip['max_speed'], speed)
+                            current_trip['end_time'] = item['timestamp']
+                            
+                        elif current_trip is not None:  # Ignition OFF
+                            # End current trip
+                            duration_ms = current_trip['end_time'] - current_trip['start_time']
+                            
+                            # Calculate average speed
+                            speeds = [p['speed'] for p in current_trip['points']]
+                            avg_speed = sum(speeds) / len(speeds) if speeds else 0
+                            
+                            current_trip['duration_ms'] = duration_ms
+                            current_trip['avg_speed'] = round(avg_speed, 1)
+                            current_trip['num_points'] = len(current_trip['points'])
+                            
+                            trips.append(current_trip)
+                            current_trip = None
+                            
+                except Exception as e:
+                    print(f"Error parsing record: {str(e)}")
+                    continue
         
-        # If there's an ongoing trip, add it
+        # Add current trip if still ongoing
         if current_trip is not None:
-            current_trip['end_time'] = current_trip['points'][-1]['timestamp']
-            current_trip['end_datetime'] = current_trip['points'][-1]['datetime']
-            current_trip['end_location'] = current_trip['points'][-1]['gps']
-            current_trip['duration_ms'] = current_trip['end_time'] - current_trip['start_time']
+            duration_ms = current_trip['end_time'] - current_trip['start_time']
+            speeds = [p['speed'] for p in current_trip['points']]
+            avg_speed = sum(speeds) / len(speeds) if speeds else 0
             
-            if current_trip['duration_ms'] > 0:
-                current_trip['avg_speed'] = (current_trip['distance'] / (current_trip['duration_ms'] / 1000)) * 3600
-            else:
-                current_trip['avg_speed'] = 0
+            current_trip['duration_ms'] = duration_ms
+            current_trip['avg_speed'] = round(avg_speed, 1)
+            current_trip['num_points'] = len(current_trip['points'])
+            current_trip['ongoing'] = True
             
             trips.append(current_trip)
         
-        # Return trips (most recent first)
-        trips.reverse()
-        
-        return jsonify({
+        result = {
             'imei': imei,
             'count': len(trips),
             'trips': trips
-        })
+        }
+        
+        return jsonify(result)
         
     except Exception as e:
-        import traceback
-        traceback.print_exc()
+        print(f"Error fetching trips: {str(e)}")
         return jsonify({'error': str(e)}), 500
 
-@app.route('/api/stats', methods=['GET'])
-def get_stats():
-    """Get overall statistics"""
-    imei = request.args.get('imei', '862464068525406')
-    hours = int(request.args.get('hours', 168))
-    
+@app.route('/api/stats/<imei>', methods=['GET'])
+def get_stats(imei):
+    """Get statistics for a time period"""
     try:
-        # Get trip data
-        cutoff_time = int((datetime.now() - timedelta(hours=hours)).timestamp() * 1000)
+        hours = int(request.args.get('hours', 24))
+        cutoff = int((datetime.utcnow() - timedelta(hours=hours)).timestamp() * 1000)
         
         response = table.query(
-            KeyConditionExpression=Key('imei').eq(imei) & Key('timestamp').gt(cutoff_time),
-            ScanIndexForward=True
+            KeyConditionExpression=Key('imei').eq(imei) & Key('timestamp').gte(cutoff),
+            ScanIndexForward=False
         )
         
-        total_records = 0
-        total_distance = 0
-        max_speed = 0
+        items = response.get('Items', [])
         
-        for item in response['Items']:
-            if 'parsed_data' in item:
-                parsed = json.loads(item['parsed_data'])
-                if parsed.get('records'):
-                    total_records += len(parsed['records'])
-                    
-                    for record in parsed['records']:
-                        speed = record.get('gps', {}).get('speed_kmh', 0)
+        # Calculate stats
+        total_records = len(items)
+        max_speed = 0
+        total_distance = 0
+        
+        for item in items:
+            if 'records' in item and item['records']:
+                try:
+                    records = json.loads(item['records'])
+                    if records:
+                        record = records[0]
+                        gps = record.get('gps', {})
+                        speed = gps.get('speed_kmh', 0)
                         max_speed = max(max_speed, speed)
                         
-                        trip_odo = record.get('io', {}).get('trip_odometer', {}).get('value', 0)
-                        if trip_odo > total_distance:
-                            total_distance = trip_odo
+                        # Get odometer if available
+                        io = record.get('io', {})
+                        trip_odo = io.get('trip_odometer', {}).get('value', 0)
+                        total_distance = max(total_distance, trip_odo / 1000)  # Convert to km
+                        
+                except:
+                    continue
         
-        return jsonify({
+        result = {
             'imei': imei,
             'period_hours': hours,
             'total_records': total_records,
-            'total_distance_km': total_distance / 1000,
-            'max_speed_kmh': max_speed
-        })
+            'total_distance_km': round(total_distance, 1),
+            'max_speed_kmh': round(max_speed, 1)
+        }
+        
+        return jsonify(result)
         
     except Exception as e:
+        print(f"Error calculating stats: {str(e)}")
         return jsonify({'error': str(e)}), 500
 
-def calculate_distance(lat1, lon1, lat2, lon2):
-    """Calculate distance between two GPS coordinates in km"""
-    from math import radians, sin, cos, sqrt, atan2
-    
-    R = 6371  # Earth's radius in km
-    
-    lat1_rad = radians(lat1)
-    lat2_rad = radians(lat2)
-    delta_lat = radians(lat2 - lat1)
-    delta_lon = radians(lon2 - lon1)
-    
-    a = sin(delta_lat/2)**2 + cos(lat1_rad) * cos(lat2_rad) * sin(delta_lon/2)**2
-    c = 2 * atan2(sqrt(a), sqrt(1-a))
-    
-    return R * c
+@app.errorhandler(404)
+def not_found(error):
+    return jsonify({'error': 'Endpoint not found'}), 404
+
+@app.errorhandler(500)
+def internal_error(error):
+    return jsonify({'error': 'Internal server error'}), 500
 
 if __name__ == '__main__':
-    app.run(host='0.0.0.0', port=5000, debug=True)
+    port = int(os.environ.get('PORT', 5000))
+    print(f"🚀 Starting API server on port {port}")
+    print(f"📊 DynamoDB Table: {TABLE_NAME}")
+    print(f"🌍 AWS Region: {AWS_REGION}")
+    print(f"🔗 Endpoints:")
+    print(f"   GET /api/health")
+    print(f"   GET /api/latest/<imei>")
+    print(f"   GET /api/history/<imei>?limit=100&hours=24")
+    print(f"   GET /api/trips/<imei>?hours=168")
+    print(f"   GET /api/stats/<imei>?hours=24")
+    
+    app.run(host='0.0.0.0', port=port, debug=False)
