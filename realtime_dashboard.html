@@ -100,10 +100,14 @@
         <!-- Vehicle Info -->
         <div class="bg-gradient-to-br from-blue-900 to-blue-800 rounded-lg shadow-2xl p-4 md:p-6 mb-6 border border-blue-700">
             <h2 class="text-xl md:text-2xl font-bold text-white mb-4">Vehicle Information</h2>
-            <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
                 <div>
                     <p class="text-blue-200 text-sm mb-1">VIN</p>
                     <p id="vin" class="text-lg md:text-2xl font-mono font-bold text-white">-</p>
+                </div>
+                <div>
+                    <p class="text-blue-200 text-sm mb-1">Vehicle</p>
+                    <p id="vehicleInfo" class="text-lg md:text-xl text-white">-</p>
                 </div>
                 <div>
                     <p class="text-blue-200 text-sm mb-1">IMEI</p>
@@ -298,7 +302,6 @@
         }
 
         function formatDuration(ms) {
-            // Handle string or number
             ms = parseInt(ms) || 0;
             if (ms < 0) return '0h 0m';
             const minutes = Math.floor(ms / 60000);
@@ -308,24 +311,13 @@
         }
 
         function formatDateTime(timestamp) {
-            // Handle invalid timestamps
             if (!timestamp) return 'Invalid Date';
-            
-            // Convert string to number if needed
             timestamp = parseInt(timestamp);
             if (isNaN(timestamp) || timestamp <= 0) return 'Invalid Date';
-            
-            // Convert to milliseconds if in seconds
-            if (timestamp < 10000000000) {
-                timestamp = timestamp * 1000;
-            }
+            if (timestamp < 10000000000) timestamp = timestamp * 1000;
             
             const date = new Date(timestamp);
-            
-            // Check if date is valid
-            if (isNaN(date.getTime())) {
-                return 'Invalid Date';
-            }
+            if (isNaN(date.getTime())) return 'Invalid Date';
             
             return date.toLocaleString('en-US', {
                 month: 'short',
@@ -359,6 +351,7 @@
         let currentData = null;
         let refreshTimer = null;
         let tripsData = [];
+        let vehicleInfo = null;
 
         // Initialize map
         function initMap() {
@@ -380,8 +373,6 @@
                 document.getElementById('noTrips').classList.add('hidden');
                 document.getElementById('tripsList').innerHTML = '';
                 
-                console.log(`Fetching trips for last ${hours} hours...`);
-                
                 const response = await fetch(`${API_BASE_URL}/trips/${DEFAULT_IMEI}?hours=${hours}`);
                 
                 if (!response.ok) {
@@ -389,15 +380,8 @@
                 }
                 
                 const result = await response.json();
-                console.log('Trips API response:', result);
-                
                 tripsData = result.trips || [];
-                console.log(`Found ${tripsData.length} trips`);
-                
-                // Debug: Log first trip if exists
-                if (tripsData.length > 0) {
-                    console.log('Sample trip:', tripsData[0]);
-                }
+                vehicleInfo = result.vehicle || {};
                 
                 updateTripsDisplay();
                 
@@ -406,7 +390,6 @@
                 document.getElementById('tripsLoading').classList.add('hidden');
                 document.getElementById('noTrips').classList.remove('hidden');
                 
-                // Show error in UI
                 const noTripsDiv = document.getElementById('noTrips');
                 noTripsDiv.innerHTML = `
                     <svg class="w-16 h-16 mx-auto text-red-600 mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -453,25 +436,26 @@
             });
             
             tripsList.innerHTML = sortedTrips.map((trip, index) => {
-                // Validate and format distance (handle string or number)
                 const distance = parseFloat(trip.total_distance) || 0;
                 const distanceMiles = distance > 0 ? metersToMiles(distance).toFixed(1) : '0.0';
                 
-                // Validate and format speeds (handle string or number)
                 const maxSpeed = parseFloat(trip.max_speed) || 0;
                 const avgSpeed = parseFloat(trip.avg_speed) || 0;
                 const maxSpeedMph = maxSpeed > 0 ? kmToMiles(maxSpeed).toFixed(1) : '0.0';
                 const avgSpeedMph = avgSpeed > 0 ? kmToMiles(avgSpeed).toFixed(1) : '0.0';
                 
-                // Format duration
                 const duration = formatDuration(trip.duration_ms || 0);
-                
-                // Format times with validation
                 const startTime = formatDateShort(trip.start_time);
                 const endTime = trip.end_time ? formatDateShort(trip.end_time) : 'Ongoing';
                 const isOngoing = trip.ongoing || false;
                 
-                // Create trip card
+                // Get vehicle info
+                const vin = trip.vin || 'Unknown';
+                const vehicleMake = trip.vehicle_make || 'Unknown';
+                const vehicleModel = trip.vehicle_model || 'Unknown';
+                const vehicleYear = trip.vehicle_year || 'Unknown';
+                const distanceSource = trip.distance_source || 'gps';
+                
                 return `
                     <div class="trip-card bg-gray-900 border border-gray-700 rounded-lg p-4 hover:border-blue-500 cursor-pointer"
                          onclick='showTripDetails(${JSON.stringify(trip).replace(/'/g, "&apos;")})'>
@@ -488,9 +472,26 @@
                             ${isOngoing ? '<span class="px-2 py-1 bg-green-900 text-green-300 rounded text-xs font-semibold animate-pulse">ONGOING</span>' : ''}
                         </div>
                         
+                        <!-- Vehicle Info Card -->
+                        <div class="mb-3 p-3 bg-gray-800 rounded border border-gray-700">
+                            <div class="flex items-center gap-2 mb-2">
+                                <svg class="w-4 h-4 text-blue-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path>
+                                </svg>
+                                <span class="text-gray-300 font-semibold text-sm">${vehicleYear} ${vehicleMake} ${vehicleModel}</span>
+                            </div>
+                            <div class="flex items-center gap-2">
+                                <span class="text-gray-500 text-xs">VIN:</span>
+                                <span class="text-white font-mono text-xs">${vin}</span>
+                            </div>
+                        </div>
+                        
                         <div class="grid grid-cols-2 md:grid-cols-4 gap-3 mt-3">
                             <div>
-                                <p class="text-gray-500 text-xs mb-1">Distance</p>
+                                <p class="text-gray-500 text-xs mb-1">
+                                    Distance
+                                    ${distanceSource === 'gps' ? '<span class="text-yellow-500" title="Calculated from GPS">📍</span>' : '<span class="text-green-500" title="From odometer">📊</span>'}
+                                </p>
                                 <p class="text-white font-bold text-lg">${distanceMiles} mi</p>
                             </div>
                             <div>
@@ -514,13 +515,11 @@
                     </div>
                 `;
             }).join('');
-            
         }
         
         // Show trip details (for future enhancement)
         function showTripDetails(trip) {
             console.log('Trip details:', trip);
-            // TODO: Could add a modal with route map, detailed stats, etc.
         }
 
         // Toggle trips section
@@ -531,7 +530,6 @@
             tripHistory.classList.toggle('hidden');
             chevron.classList.toggle('rotate-180');
             
-            // Fetch trips when opening for first time
             if (!tripHistory.classList.contains('hidden') && tripsData.length === 0) {
                 fetchTrips();
             }
@@ -574,27 +572,51 @@
             const gps = data.gps;
             const io = data.io;
             
-            // Update live indicator
             setLiveIndicator(true);
             
-            // Update VIN
+            // Update VIN and vehicle info
             document.getElementById('vin').textContent = result.vin || 'WBAEP33485PF04957';
             document.getElementById('imei').textContent = result.imei;
+            
+            // Decode and display vehicle info
+            if (result.vin) {
+                const vin = result.vin.toString();
+                let vehicleText = 'Unknown Vehicle';
+                
+                if (vin.startsWith('WBA')) {
+                    const modelCode = vin[3] || '';
+                    const models = {
+                        'A': '3 Series', 'B': '5 Series', 'C': '7 Series',
+                        'E': '3 Series', 'F': 'M Series', 'G': 'X Series', 'K': '6 Series'
+                    };
+                    const model = models[modelCode] || 'BMW';
+                    
+                    const yearCode = vin[9] || '';
+                    const yearMap = {
+                        'A': 2010, 'B': 2011, 'C': 2012, 'D': 2013, 'E': 2014,
+                        'F': 2015, 'G': 2016, 'H': 2017, 'J': 2018, 'K': 2019,
+                        'L': 2020, 'M': 2021, 'N': 2022, 'P': 2023, 'R': 2024,
+                        'S': 2025, '5': 2005, '6': 2006, '7': 2007, '8': 2008, '9': 2009
+                    };
+                    const year = yearMap[yearCode] || '';
+                    
+                    vehicleText = `${year} BMW ${model}`;
+                }
+                
+                document.getElementById('vehicleInfo').textContent = vehicleText;
+            }
             
             // Update GPS
             if (gps && gps.valid) {
                 const lat = gps.latitude;
                 const lng = gps.longitude;
                 
-                // Update map
                 marker.setLatLng([lat, lng]);
                 map.setView([lat, lng], map.getZoom());
                 
-                // Update Google Maps link
                 document.getElementById('googleMapsLink').href = 
                     `https://www.google.com/maps?q=${lat},${lng}`;
                 
-                // Update satellites
                 const sats = gps.satellites || 0;
                 document.getElementById('satellites').textContent = sats;
                 
@@ -607,23 +629,21 @@
                 else if (sats >= 4) qualityText = 'Fair';
                 document.getElementById('gpsQualityText').textContent = qualityText;
                 
-                // Update altitude
                 document.getElementById('altitude').textContent = 
                     (gps.altitude || 0).toFixed(0);
                 
-                // Update heading
                 const angle = gps.angle || 0;
                 const directions = ['N', 'NE', 'E', 'SE', 'S', 'SW', 'W', 'NW'];
                 const dir = directions[Math.round(angle / 45) % 8];
                 document.getElementById('heading').textContent = `${angle}° ${dir}`;
             }
             
-            // Update speed (convert to mph)
+            // Update speed
             const speedKmh = gps.speed_kmh || 0;
             const speedMph = kmToMiles(speedKmh);
             document.getElementById('speed').textContent = speedMph.toFixed(0);
             
-            if (speedMph > 3) {  // 3 mph threshold
+            if (speedMph > 3) {
                 document.getElementById('movementStatus').textContent = 'MOVING';
                 document.getElementById('movementStatus').className = 
                     'px-3 py-1 bg-green-900 text-green-300 rounded-full text-xs md:text-sm font-semibold';
@@ -647,19 +667,16 @@
             const tripOdometer = io?.trip_odometer?.value || 0;
             const totalOdometer = io?.total_odometer?.value || 0;
             
-            // Initialize trip start when ignition turns on
             if (ignitionOn && tripStartOdometer === null) {
                 tripStartOdometer = tripOdometer;
                 tripStartTime = data.timestamp;
             }
             
-            // Reset trip when ignition turns off
             if (!ignitionOn) {
                 tripStartOdometer = null;
                 tripStartTime = null;
             }
             
-            // Calculate trip distance (convert to miles)
             const tripDistance = tripStartOdometer !== null 
                 ? ((tripOdometer - tripStartOdometer) / 1000).toFixed(1)
                 : (tripOdometer / 1000).toFixed(1);
@@ -671,7 +688,6 @@
             document.getElementById('totalOdometer').textContent = 
                 totalOdometer ? totalOdometerMiles + ' mi' : '- mi';
             
-            // Calculate trip duration
             if (tripStartTime && ignitionOn) {
                 const duration = data.timestamp - tripStartTime;
                 const minutes = Math.floor(duration / 60000);
@@ -680,7 +696,6 @@
                 document.getElementById('tripDuration').textContent = 
                     `${hours}:${mins.toString().padStart(2, '0')}`;
                 
-                // Calculate average speed in mph
                 if (tripDistanceMiles > 0.1) {
                     const avgSpeedMph = (tripDistanceMiles / (duration / 3600000)).toFixed(1);
                     document.getElementById('avgSpeed').textContent = avgSpeedMph + ' mph';
@@ -761,7 +776,7 @@
             startAutoRefresh();
         });
 
-        // Stop refresh when page hidden (battery saving)
+        // Stop refresh when page hidden
         document.addEventListener('visibilitychange', () => {
             if (document.hidden) {
                 stopAutoRefresh();
