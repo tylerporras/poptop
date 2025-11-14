@@ -2,16 +2,18 @@
 POPTOP API Server - Connected to New Teltonika Pipeline
 Updated: November 14, 2025
 Database: Timescale Cloud (replacing DynamoDB)
+DEPLOYMENT: Railway-ready with dashboard serving
 """
 
 import json
+import os
 import psycopg2
-from flask import Flask, jsonify, request
+from flask import Flask, jsonify, request, send_from_directory
 from flask_cors import CORS
 from datetime import datetime, timedelta
 import math
 
-app = Flask(__name__)
+app = Flask(__name__, static_folder='.')
 CORS(app)
 
 # Timescale Connection Pool
@@ -54,6 +56,12 @@ def haversine_distance(lat1, lon1, lat2, lon2):
     r = 6371000  # Earth radius in meters
     return c * r
 
+# ROOT ROUTE - Serve the dashboard HTML
+@app.route('/')
+def serve_dashboard():
+    """Serve the dashboard HTML at root route for Railway deployment"""
+    return send_from_directory('.', 'dashboard_ENHANCED.html')
+
 @app.route('/api/health', methods=['GET'])
 def health_check():
     """Health check endpoint"""
@@ -67,7 +75,8 @@ def health_check():
             'status': 'ok',
             'timestamp': datetime.utcnow().isoformat(),
             'database': 'Timescale Cloud',
-            'table': 'telemetry'
+            'table': 'telemetry',
+            'deployment': 'Railway'
         })
     except Exception as e:
         return jsonify({
@@ -478,14 +487,14 @@ def get_stats(imei=None):
         return jsonify({'error': str(e)}), 500
 
 if __name__ == '__main__':
-    import os
     port = int(os.environ.get('PORT', 5000))
     print(f"""
     ╔═══════════════════════════════════════════════════════════════╗
-    ║  POPTOP API Server - Connected to Teltonika Pipeline        ║
+    ║  POPTOP API Server - Railway Deployment Ready               ║
     ║  Database: Timescale Cloud                                   ║
     ║  Port: {port}                                                     ║
+    ║  Dashboard: Available at / (root route)                      ║
     ║  Status: Ready to receive requests                           ║
     ╚═══════════════════════════════════════════════════════════════╝
     """)
-    app.run(host='0.0.0.0', port=port, debug=True)
+    app.run(host='0.0.0.0', port=port, debug=False)

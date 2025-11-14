@@ -41,8 +41,10 @@
     <script type="text/babel">
         const { useState, useEffect, useRef } = React;
 
-        // Configuration
-        const API_BASE_URL = 'http://localhost:5000/api';
+        // Configuration - Auto-detect API URL (works locally and on Railway)
+        const API_BASE_URL = window.location.hostname === 'localhost' 
+            ? 'http://localhost:5000/api'
+            : `${window.location.protocol}//${window.location.host}/api`;
         const DEFAULT_IMEI = '862464068525406';  // Device #1 (Sprinter)
 
         const FleetDashboard = () => {
