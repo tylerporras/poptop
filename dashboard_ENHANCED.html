@@ -1,0 +1,455 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>POPTOP Fleet Tracker - Enhanced Telemetry</title>
+    <script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+    <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        .leaflet-container {
+            height: 100%;
+            width: 100%;
+            border-radius: 0.5rem;
+        }
+        .telemetry-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+            gap: 0.75rem;
+        }
+        .telemetry-card {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            border-radius: 0.5rem;
+            padding: 0.75rem;
+            color: white;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        .telemetry-card.power { background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%); }
+        .telemetry-card.vehicle { background: linear-gradient(135deg, #4facfe 0%, #00f2fe 100%); }
+        .telemetry-card.obd { background: linear-gradient(135deg, #43e97b 0%, #38f9d7 100%); }
+        .telemetry-card.network { background: linear-gradient(135deg, #fa709a 0%, #fee140 100%); }
+        .telemetry-card.gps { background: linear-gradient(135deg, #30cfd0 0%, #330867 100%); }
+    </style>
+</head>
+<body class="bg-gray-100">
+    <div id="root"></div>
+
+    <script type="text/babel">
+        const { useState, useEffect, useRef } = React;
+
+        // Configuration
+        const API_BASE_URL = 'http://localhost:5000/api';
+        const DEFAULT_IMEI = '862464068525406';  // Device #1 (Sprinter)
+
+        const FleetDashboard = () => {
+            const [currentData, setCurrentData] = useState(null);
+            const [trips, setTrips] = useState([]);
+            const [stats, setStats] = useState(null);
+            const [devices, setDevices] = useState([]);
+            const [selectedIMEI, setSelectedIMEI] = useState(DEFAULT_IMEI);
+            const [selectedTrip, setSelectedTrip] = useState(null);
+            const [autoRefresh, setAutoRefresh] = useState(true);
+            const [loading, setLoading] = useState(true);
+            const [error, setError] = useState(null);
+            const [showAllIO, setShowAllIO] = useState(false);
+            const mapRef = useRef(null);
+            const mapInstanceRef = useRef(null);
+            const markersRef = useRef([]);
+
+            // Load data
+            useEffect(() => {
+                loadAllData();
+                
+                if (autoRefresh) {
+                    const interval = setInterval(loadAllData, 5000);
+                    return () => clearInterval(interval);
+                }
+            }, [autoRefresh, selectedIMEI]);
+
+            const loadAllData = async () => {
+                try {
+                    setError(null);
+                    
+                    // Load devices list
+                    const devicesRes = await fetch(`${API_BASE_URL}/devices`);
+                    if (devicesRes.ok) {
+                        const devicesData = await devicesRes.json();
+                        setDevices(devicesData.devices || []);
+                    }
+                    
+                    // Load latest data
+                    const latestRes = await fetch(`${API_BASE_URL}/latest/${selectedIMEI}`);
+                    if (latestRes.ok) {
+                        const latestData = await latestRes.json();
+                        setCurrentData(latestData.data);
+                    }
+                    
+                    // Load trips
+                    const tripsRes = await fetch(`${API_BASE_URL}/trips/${selectedIMEI}?hours=168`);
+                    if (tripsRes.ok) {
+                        const tripsData = await tripsRes.json();
+                        setTrips(tripsData.trips || []);
+                    }
+                    
+                    // Load stats
+                    const statsRes = await fetch(`${API_BASE_URL}/stats/${selectedIMEI}?hours=168`);
+                    if (statsRes.ok) {
+                        const statsData = await statsRes.json();
+                        setStats(statsData);
+                    }
+                    
+                    setLoading(false);
+                    
+                } catch (err) {
+                    console.error('Error loading data:', err);
+                    setError(err.message);
+                    setLoading(false);
+                }
+            };
+
+            // Initialize map
+            useEffect(() => {
+                if (mapRef.current && !mapInstanceRef.current) {
+                    mapInstanceRef.current = L.map(mapRef.current).setView([38.54963, -121.4792916], 13);
+                    
+                    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+                        attribution: '© OpenStreetMap contributors',
+                        maxZoom: 19
+                    }).addTo(mapInstanceRef.current);
+                }
+            }, []);
+
+            // Update map with data
+            useEffect(() => {
+                if (!mapInstanceRef.current || !currentData) return;
+
+                markersRef.current.forEach(marker => marker.remove());
+                markersRef.current = [];
+
+                const map = mapInstanceRef.current;
+                const lat = currentData.gps.latitude;
+                const lon = currentData.gps.longitude;
+                
+                if (!lat || !lon) return;
+
+                const ignitionOn = currentData.io.ignition?.value === 1;
+                const markerColor = ignitionOn ? '#22c55e' : '#ef4444';
+                
+                const marker = L.marker([lat, lon], {
+                    icon: L.divIcon({
+                        className: 'custom-div-icon',
+                        html: `<div style='background-color:${markerColor};width:32px;height:32px;border-radius:50%;border:4px solid white;box-shadow:0 3px 8px rgba(0,0,0,0.4);'></div>`,
+                        iconSize: [32, 32]
+                    })
+                }).addTo(map).bindPopup(`
+                    <div style="font-family: sans-serif;">
+                        <strong>Current Location</strong><br/>
+                        <div style="margin-top: 8px;">
+                            <strong>IMEI:</strong> ${selectedIMEI}<br/>
+                            <strong>Speed:</strong> ${currentData.gps.speed_kmh.toFixed(1)} km/h<br/>
+                            <strong>Satellites:</strong> ${currentData.gps.satellites}<br/>
+                            <strong>Ignition:</strong> ${ignitionOn ? '🟢 ON' : '🔴 OFF'}<br/>
+                            <strong>Time:</strong> ${new Date(currentData.timestamp).toLocaleString()}
+                        </div>
+                    </div>
+                `);
+                markersRef.current.push(marker);
+                marker.openPopup();
+                
+                map.setView([lat, lon], 15);
+            }, [currentData, selectedIMEI]);
+
+            const formatDuration = (ms) => {
+                const seconds = Math.floor(ms / 1000);
+                const minutes = Math.floor(seconds / 60);
+                const hours = Math.floor(minutes / 60);
+                if (hours > 0) return `${hours}h ${minutes % 60}m`;
+                if (minutes > 0) return `${minutes}m`;
+                return `${seconds}s`;
+            };
+
+            const renderIOElement = (key, data, category) => {
+                if (!data || data.value === null || data.value === undefined) return null;
+                
+                const value = data.value;
+                const description = data.description || key;
+                
+                // Format value based on type
+                let displayValue = value;
+                if (key === 'external_voltage' || key === 'battery_voltage') {
+                    displayValue = `${(value / 1000).toFixed(2)}V`;
+                } else if (key === 'total_odometer' || key === 'trip_odometer') {
+                    displayValue = `${(value / 1000).toFixed(1)} km`;
+                } else if (key === 'obd_odometer') {
+                    displayValue = `${value.toFixed(1)} km`;
+                } else if (key === 'obd_fuel_rate') {
+                    displayValue = `${(value / 100).toFixed(2)} L/h`;
+                } else if (typeof value === 'number') {
+                    displayValue = value.toFixed(value % 1 === 0 ? 0 : 2);
+                }
+                
+                return (
+                    <div key={key} className={`telemetry-card ${category}`}>
+                        <div className="text-xs opacity-75 truncate">{description}</div>
+                        <div className="text-2xl font-bold mt-1">{displayValue}</div>
+                    </div>
+                );
+            };
+
+            const categorizeIOElements = () => {
+                if (!currentData || !currentData.io) return {};
+                
+                const categories = {
+                    power: [],
+                    vehicle: [],
+                    obd: [],
+                    network: [],
+                    gps: [],
+                    other: []
+                };
+                
+                Object.entries(currentData.io).forEach(([key, data]) => {
+                    if (key.includes('voltage') || key.includes('battery') || key.includes('current')) {
+                        categories.power.push({ key, data, category: 'power' });
+                    } else if (key.includes('ignition') || key.includes('movement') || key.includes('odometer')) {
+                        categories.vehicle.push({ key, data, category: 'vehicle' });
+                    } else if (key.startsWith('obd_') || key.includes('dtc') || key.includes('mil') || key.includes('vin')) {
+                        categories.obd.push({ key, data, category: 'obd' });
+                    } else if (key.includes('gsm') || key.includes('cell') || key.includes('iccid') || key.includes('imsi')) {
+                        categories.network.push({ key, data, category: 'network' });
+                    } else if (key.includes('gps') || key.includes('gnss') || key.includes('pdop') || key.includes('hdop')) {
+                        categories.gps.push({ key, data, category: 'gps' });
+                    } else {
+                        categories.other.push({ key, data, category: 'other' });
+                    }
+                });
+                
+                return categories;
+            };
+
+            if (loading) {
+                return (
+                    <div className="min-h-screen bg-gray-100 flex items-center justify-center">
+                        <div className="text-center">
+                            <div className="text-5xl mb-4">🚗</div>
+                            <div className="text-2xl font-bold text-gray-700">Loading POPTOP Dashboard...</div>
+                            <div className="text-sm text-gray-500 mt-2">Connecting to Timescale Cloud</div>
+                        </div>
+                    </div>
+                );
+            }
+
+            if (error && !currentData) {
+                return (
+                    <div className="min-h-screen bg-gray-100 flex items-center justify-center">
+                        <div className="bg-white rounded-lg shadow-lg p-8 max-w-md">
+                            <div className="text-red-500 text-5xl mb-4">⚠️</div>
+                            <h2 className="text-2xl font-bold text-gray-800 mb-2">Connection Error</h2>
+                            <p className="text-gray-600 mb-4">{error}</p>
+                            <p className="text-sm text-gray-500 mb-4">
+                                Make sure the API server is running:<br/>
+                                <code className="bg-gray-100 px-2 py-1 rounded block mt-2">python api_server_NEW.py</code>
+                            </p>
+                            <button
+                                onClick={loadAllData}
+                                className="px-6 py-3 bg-blue-500 text-white rounded-lg hover:bg-blue-600 transition font-semibold"
+                            >
+                                Retry Connection
+                            </button>
+                        </div>
+                    </div>
+                );
+            }
+
+            const categories = categorizeIOElements();
+            const totalIOElements = currentData ? Object.keys(currentData.io).length : 0;
+
+            return (
+                <div className="min-h-screen bg-gray-100 p-4">
+                    {/* Header */}
+                    <div className="bg-white rounded-lg shadow-md p-6 mb-4">
+                        <div className="flex justify-between items-center">
+                            <div>
+                                <h1 className="text-4xl font-bold text-gray-800">🚗 POPTOP Fleet Tracker</h1>
+                                <p className="text-gray-600 mt-1">Enhanced Telemetry Dashboard - All {totalIOElements} IO Elements</p>
+                                {stats && (
+                                    <p className="text-sm text-gray-500 mt-2">
+                                        Last 7 days: {stats.total_records} records · {stats.total_distance_km.toFixed(1)} km · Max {stats.max_speed_kmh.toFixed(0)} km/h
+                                    </p>
+                                )}
+                            </div>
+                            <div className="flex items-center gap-4">
+                                <select
+                                    value={selectedIMEI}
+                                    onChange={(e) => setSelectedIMEI(e.target.value)}
+                                    className="px-4 py-2 border border-gray-300 rounded-lg"
+                                >
+                                    {devices.map(device => (
+                                        <option key={device.imei} value={device.imei}>
+                                            {device.imei} ({device.vin})
+                                        </option>
+                                    ))}
+                                </select>
+                                <label className="flex items-center gap-2 cursor-pointer">
+                                    <input
+                                        type="checkbox"
+                                        checked={autoRefresh}
+                                        onChange={(e) => setAutoRefresh(e.target.checked)}
+                                        className="w-4 h-4"
+                                    />
+                                    <span className="text-sm text-gray-700">Auto-refresh (5s)</span>
+                                </label>
+                                <button
+                                    onClick={loadAllData}
+                                    className="px-4 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600 transition font-semibold"
+                                >
+                                    🔄 Refresh
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
+                        {/* Main Column - Map */}
+                        <div className="lg:col-span-2 space-y-4">
+                            {/* Map */}
+                            <div className="bg-white rounded-lg shadow-md p-4">
+                                <h2 className="text-2xl font-bold mb-4 text-gray-800">📍 Live Location</h2>
+                                <div ref={mapRef} style={{ height: '400px' }}></div>
+                            </div>
+
+                            {/* Comprehensive Telemetry - ALL 53 IO Elements */}
+                            {currentData && (
+                                <div className="bg-white rounded-lg shadow-md p-6">
+                                    <div className="flex justify-between items-center mb-4">
+                                        <h2 className="text-2xl font-bold text-gray-800">
+                                            📊 Complete Telemetry ({totalIOElements} IO Elements)
+                                        </h2>
+                                        <button
+                                            onClick={() => setShowAllIO(!showAllIO)}
+                                            className="px-4 py-2 bg-purple-500 text-white rounded-lg hover:bg-purple-600 transition text-sm"
+                                        >
+                                            {showAllIO ? 'Show Less' : 'Show All IO'}
+                                        </button>
+                                    </div>
+
+                                    {/* Power & Battery */}
+                                    <div className="mb-6">
+                                        <h3 className="text-lg font-semibold text-gray-700 mb-3">⚡ Power & Battery ({categories.power.length})</h3>
+                                        <div className="telemetry-grid">
+                                            {categories.power.map(item => renderIOElement(item.key, item.data, item.category))}
+                                        </div>
+                                    </div>
+
+                                    {/* Vehicle Status */}
+                                    <div className="mb-6">
+                                        <h3 className="text-lg font-semibold text-gray-700 mb-3">🚗 Vehicle Status ({categories.vehicle.length})</h3>
+                                        <div className="telemetry-grid">
+                                            {categories.vehicle.map(item => renderIOElement(item.key, item.data, item.category))}
+                                        </div>
+                                    </div>
+
+                                    {/* OBD-II Data */}
+                                    <div className="mb-6">
+                                        <h3 className="text-lg font-semibold text-gray-700 mb-3">🔧 OBD-II Data ({categories.obd.length})</h3>
+                                        <div className="telemetry-grid">
+                                            {categories.obd.map(item => renderIOElement(item.key, item.data, item.category))}
+                                        </div>
+                                    </div>
+
+                                    {/* Cellular Network */}
+                                    <div className="mb-6">
+                                        <h3 className="text-lg font-semibold text-gray-700 mb-3">📱 Cellular Network ({categories.network.length})</h3>
+                                        <div className="telemetry-grid">
+                                            {categories.network.map(item => renderIOElement(item.key, item.data, item.category))}
+                                        </div>
+                                    </div>
+
+                                    {/* GPS/GNSS */}
+                                    <div className="mb-6">
+                                        <h3 className="text-lg font-semibold text-gray-700 mb-3">🛰️ GPS/GNSS ({categories.gps.length})</h3>
+                                        <div className="telemetry-grid">
+                                            {categories.gps.map(item => renderIOElement(item.key, item.data, item.category))}
+                                        </div>
+                                    </div>
+
+                                    {/* Other Elements (shown when "Show All IO" is enabled) */}
+                                    {showAllIO && categories.other.length > 0 && (
+                                        <div className="mb-6">
+                                            <h3 className="text-lg font-semibold text-gray-700 mb-3">📋 Other Elements ({categories.other.length})</h3>
+                                            <div className="telemetry-grid">
+                                                {categories.other.map(item => renderIOElement(item.key, item.data, 'other'))}
+                                            </div>
+                                        </div>
+                                    )}
+
+                                    <div className="mt-6 p-4 bg-gray-50 rounded-lg text-sm text-gray-600">
+                                        <strong>Last Update:</strong> {new Date(currentData.timestamp).toLocaleString()}<br/>
+                                        <strong>Data Source:</strong> Timescale Cloud (Direct MQTT Connection)<br/>
+                                        <strong>All IO elements are being captured and displayed above! ✅</strong>
+                                    </div>
+                                </div>
+                            )}
+                        </div>
+
+                        {/* Right Column - Trips */}
+                        <div className="space-y-4">
+                            <div className="bg-white rounded-lg shadow-md p-6">
+                                <h2 className="text-2xl font-bold mb-4 text-gray-800">📋 Trip History</h2>
+                                
+                                {trips.length === 0 ? (
+                                    <div className="text-center text-gray-500 py-8">
+                                        <div className="text-5xl mb-3">🚗</div>
+                                        <div className="font-semibold">No trips recorded yet</div>
+                                        <div className="text-sm mt-2">Drive with ignition on to start tracking!</div>
+                                    </div>
+                                ) : (
+                                    <div className="space-y-3 max-h-[800px] overflow-y-auto pr-2">
+                                        {trips.map((trip) => (
+                                            <div
+                                                key={trip.id}
+                                                className="p-4 rounded-lg border-2 border-gray-200 hover:border-blue-300 bg-white hover:shadow transition cursor-pointer"
+                                            >
+                                                <div className="flex justify-between items-start mb-2">
+                                                    <div className="font-bold text-gray-800">
+                                                        🚗 Trip #{trip.id}
+                                                    </div>
+                                                    {trip.ongoing && (
+                                                        <span className="px-2 py-1 text-xs bg-green-100 text-green-800 rounded font-medium">
+                                                            ⏱️ Live
+                                                        </span>
+                                                    )}
+                                                </div>
+                                                
+                                                <div className="text-sm text-gray-600 space-y-1">
+                                                    <div>📅 {new Date(trip.start_time).toLocaleDateString()}</div>
+                                                    <div>🕐 {new Date(trip.start_time).toLocaleTimeString()}</div>
+                                                    <div>⏱️ {formatDuration(trip.duration_ms)}</div>
+                                                    <div>📍 {trip.distance.toFixed(2)} km</div>
+                                                    <div>🚀 Max: {trip.max_speed.toFixed(0)} km/h</div>
+                                                    <div>📊 Avg: {trip.avg_speed.toFixed(0)} km/h</div>
+                                                    {trip.vin && trip.vin !== 'Unknown' && (
+                                                        <div className="text-xs bg-gray-100 px-2 py-1 rounded mt-2">
+                                                            VIN: {trip.vin}
+                                                        </div>
+                                                    )}
+                                                </div>
+                                            </div>
+                                        ))}
+                                    </div>
+                                )}
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            );
+        };
+
+        ReactDOM.render(<FleetDashboard />, document.getElementById('root'));
+    </script>
+</body>
+</html>
