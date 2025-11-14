@@ -10,16 +10,26 @@
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
     <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
     <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
     <style>
+        * {
+            font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+        }
         body {
-            background-color: #0a0e17;
-            color: #e2e8f0;
+            background-color: #0d1117;
+            color: #c9d1d9;
         }
         .leaflet-container {
             height: 100%;
             width: 100%;
             border-radius: 0.75rem;
-            border: 2px solid #1e293b;
+            border: 1px solid #30363d;
+            z-index: 1;
+        }
+        .leaflet-tile-pane {
+            filter: brightness(0.6) invert(1) contrast(3) hue-rotate(200deg) saturate(0.3) invert(1);
         }
         .telemetry-grid {
             display: grid;
@@ -27,41 +37,57 @@
             gap: 1rem;
         }
         .telemetry-card {
-            background: linear-gradient(135deg, #1e293b 0%, #334155 100%);
+            background: linear-gradient(135deg, #161b22 0%, #1c2128 100%);
             border-radius: 0.75rem;
             padding: 1.25rem;
-            color: white;
-            box-shadow: 0 4px 6px rgba(0,0,0,0.4);
-            border: 1px solid #334155;
-            transition: transform 0.2s, box-shadow 0.2s;
+            color: #c9d1d9;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.4);
+            border: 1px solid #30363d;
+            transition: transform 0.2s, box-shadow 0.2s, border-color 0.2s;
         }
         .telemetry-card:hover {
             transform: translateY(-2px);
-            box-shadow: 0 6px 12px rgba(0,0,0,0.6);
+            box-shadow: 0 4px 16px rgba(0,0,0,0.6);
+            border-color: #58a6ff;
         }
         .telemetry-card.power { 
-            background: linear-gradient(135deg, #991b1b 0%, #dc2626 100%); 
-            border-color: #dc2626;
+            background: linear-gradient(135deg, #2d1b1b 0%, #3d2626 100%); 
+            border-color: #8b5a5a;
+        }
+        .telemetry-card.power:hover {
+            border-color: #d97a7a;
         }
         .telemetry-card.vehicle { 
-            background: linear-gradient(135deg, #1e40af 0%, #3b82f6 100%); 
-            border-color: #3b82f6;
+            background: linear-gradient(135deg, #1b2533 0%, #253548 100%); 
+            border-color: #5a7a8b;
+        }
+        .telemetry-card.vehicle:hover {
+            border-color: #7ab0d9;
         }
         .telemetry-card.obd { 
-            background: linear-gradient(135deg, #065f46 0%, #10b981 100%); 
-            border-color: #10b981;
+            background: linear-gradient(135deg, #1b2d27 0%, #263d35 100%); 
+            border-color: #5a8b75;
+        }
+        .telemetry-card.obd:hover {
+            border-color: #7ad9b0;
         }
         .telemetry-card.network { 
-            background: linear-gradient(135deg, #7c2d12 0%, #f97316 100%); 
-            border-color: #f97316;
+            background: linear-gradient(135deg, #2d241b 0%, #3d3226 100%); 
+            border-color: #8b7a5a;
+        }
+        .telemetry-card.network:hover {
+            border-color: #d9c27a;
         }
         .telemetry-card.gps { 
-            background: linear-gradient(135deg, #4c1d95 0%, #8b5cf6 100%); 
-            border-color: #8b5cf6;
+            background: linear-gradient(135deg, #241b2d 0%, #32263d 100%); 
+            border-color: #7a5a8b;
+        }
+        .telemetry-card.gps:hover {
+            border-color: #b07ad9;
         }
         .card-label {
             font-size: 0.875rem;
-            opacity: 0.9;
+            opacity: 0.85;
             font-weight: 600;
             text-transform: uppercase;
             letter-spacing: 0.05em;
@@ -70,48 +96,62 @@
             font-size: 2rem;
             font-weight: 700;
             margin-top: 0.5rem;
-            text-shadow: 0 2px 4px rgba(0,0,0,0.3);
         }
         .bg-dark {
-            background-color: #0f172a;
+            background-color: #0d1117;
         }
         .bg-dark-card {
-            background-color: #1e293b;
+            background-color: #161b22;
         }
         .border-dark {
-            border-color: #334155;
+            border-color: #30363d;
         }
         .text-dark-muted {
-            color: #94a3b8;
+            color: #8b949e;
         }
         .trip-card {
-            background: linear-gradient(135deg, #1e293b 0%, #334155 100%);
-            border: 2px solid #475569;
+            background: linear-gradient(135deg, #161b22 0%, #1c2128 100%);
+            border: 1px solid #30363d;
             border-radius: 0.75rem;
             padding: 1.25rem;
             transition: all 0.2s;
         }
         .trip-card:hover {
-            border-color: #3b82f6;
-            box-shadow: 0 4px 12px rgba(59, 130, 246, 0.3);
+            border-color: #58a6ff;
+            box-shadow: 0 4px 12px rgba(88, 166, 255, 0.2);
         }
         .btn-primary {
-            background: linear-gradient(135deg, #2563eb 0%, #1d4ed8 100%);
+            background: linear-gradient(135deg, #238636 0%, #2ea043 100%);
             border: none;
             padding: 0.75rem 1.5rem;
             border-radius: 0.5rem;
             font-weight: 600;
             cursor: pointer;
             transition: all 0.2s;
+            color: white;
         }
         .btn-primary:hover {
-            background: linear-gradient(135deg, #1d4ed8 0%, #1e40af 100%);
-            box-shadow: 0 4px 12px rgba(37, 99, 235, 0.4);
+            background: linear-gradient(135deg, #2ea043 0%, #3fb950 100%);
+            box-shadow: 0 4px 12px rgba(46, 160, 67, 0.4);
+        }
+        .btn-secondary {
+            background: linear-gradient(135deg, #1f6feb 0%, #388bfd 100%);
+            border: none;
+            padding: 0.75rem 1.5rem;
+            border-radius: 0.5rem;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.2s;
+            color: white;
+        }
+        .btn-secondary:hover {
+            background: linear-gradient(135deg, #388bfd 0%, #58a6ff 100%);
+            box-shadow: 0 4px 12px rgba(31, 111, 235, 0.4);
         }
         select {
-            background-color: #1e293b;
-            color: #e2e8f0;
-            border: 2px solid #334155;
+            background-color: #161b22;
+            color: #c9d1d9;
+            border: 1px solid #30363d;
             padding: 0.75rem 1rem;
             border-radius: 0.5rem;
             font-weight: 600;
@@ -119,16 +159,20 @@
         }
         select:focus {
             outline: none;
-            border-color: #3b82f6;
-            box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
+            border-color: #58a6ff;
+            box-shadow: 0 0 0 3px rgba(88, 166, 255, 0.1);
         }
         .leaflet-popup-content-wrapper {
-            background: #1e293b;
-            color: #e2e8f0;
+            background: #161b22;
+            color: #c9d1d9;
             border-radius: 0.5rem;
+            border: 1px solid #30363d;
         }
         .leaflet-popup-tip {
-            background: #1e293b;
+            background: #161b22;
+        }
+        input[type="checkbox"] {
+            accent-color: #238636;
         }
     </style>
 </head>
@@ -221,23 +265,45 @@
                 }
             };
 
-            // Initialize map
+            // Initialize map with proper cleanup
             useEffect(() => {
                 if (mapRef.current && !mapInstanceRef.current) {
-                    mapInstanceRef.current = L.map(mapRef.current).setView([38.54963, -121.4792916], 13);
+                    // Create map instance
+                    mapInstanceRef.current = L.map(mapRef.current, {
+                        center: [38.54963, -121.4792916],
+                        zoom: 13,
+                        zoomControl: true,
+                        scrollWheelZoom: true
+                    });
                     
+                    // Add tile layer
                     L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
                         attribution: '© OpenStreetMap contributors',
-                        maxZoom: 19,
-                        className: 'dark-tiles'
+                        maxZoom: 19
                     }).addTo(mapInstanceRef.current);
+                    
+                    // Force map to render properly
+                    setTimeout(() => {
+                        if (mapInstanceRef.current) {
+                            mapInstanceRef.current.invalidateSize();
+                        }
+                    }, 100);
                 }
+                
+                // Cleanup on unmount
+                return () => {
+                    if (mapInstanceRef.current) {
+                        mapInstanceRef.current.remove();
+                        mapInstanceRef.current = null;
+                    }
+                };
             }, []);
 
             // Update map with data
             useEffect(() => {
                 if (!mapInstanceRef.current || !currentData) return;
 
+                // Clear existing markers
                 markersRef.current.forEach(marker => marker.remove());
                 markersRef.current = [];
 
@@ -248,31 +314,39 @@
                 if (!lat || !lon) return;
 
                 const ignitionOn = currentData.io.ignition?.value === 1;
-                const markerColor = ignitionOn ? '#10b981' : '#ef4444';
+                const markerColor = ignitionOn ? '#3fb950' : '#f85149';
                 
                 const vehicleName = ACTIVE_VEHICLES.find(v => v.imei === selectedIMEI)?.name || selectedIMEI;
                 
                 const marker = L.marker([lat, lon], {
                     icon: L.divIcon({
                         className: 'custom-div-icon',
-                        html: `<div style='background-color:${markerColor};width:40px;height:40px;border-radius:50%;border:4px solid white;box-shadow:0 4px 12px rgba(0,0,0,0.6);'></div>`,
-                        iconSize: [40, 40]
+                        html: `<div style='background-color:${markerColor};width:40px;height:40px;border-radius:50%;border:3px solid #161b22;box-shadow:0 4px 12px rgba(0,0,0,0.6);'></div>`,
+                        iconSize: [40, 40],
+                        iconAnchor: [20, 20]
                     })
-                }).addTo(map).bindPopup(`
-                    <div style="font-family: sans-serif; padding: 8px;">
-                        <strong style="font-size: 1.1em;">${vehicleName}</strong><br/>
-                        <div style="margin-top: 12px; line-height: 1.8;">
+                }).addTo(map);
+                
+                marker.bindPopup(`
+                    <div style="font-family: 'Inter', sans-serif; padding: 8px; min-width: 200px;">
+                        <strong style="font-size: 1.1em; color: #58a6ff;">${vehicleName}</strong><br/>
+                        <div style="margin-top: 12px; line-height: 1.8; color: #c9d1d9;">
                             <strong>Speed:</strong> ${currentData.gps.speed_kmh.toFixed(1)} km/h<br/>
                             <strong>Satellites:</strong> ${currentData.gps.satellites}<br/>
-                            <strong>Ignition:</strong> ${ignitionOn ? '🟢 ON' : '🔴 OFF'}<br/>
+                            <strong>Ignition:</strong> ${ignitionOn ? '<span style="color: #3fb950;">🟢 ON</span>' : '<span style="color: #f85149;">🔴 OFF</span>'}<br/>
                             <strong>Time:</strong> ${new Date(currentData.timestamp).toLocaleString()}
                         </div>
                     </div>
                 `);
+                
                 markersRef.current.push(marker);
                 marker.openPopup();
                 
+                // Center map on marker
                 map.setView([lat, lon], 15);
+                
+                // Force map refresh
+                setTimeout(() => map.invalidateSize(), 100);
             }, [currentData, selectedIMEI]);
 
             const formatDuration = (ms) => {
@@ -358,7 +432,7 @@
             if (error && !currentData) {
                 return (
                     <div className="min-h-screen bg-dark flex items-center justify-center">
-                        <div className="bg-dark-card rounded-xl shadow-2xl p-10 max-w-md border-2 border-dark">
+                        <div className="bg-dark-card rounded-xl shadow-2xl p-10 max-w-md border border-dark">
                             <div className="text-red-500 text-6xl mb-6">⚠️</div>
                             <h2 className="text-3xl font-bold text-gray-100 mb-4">Connection Error</h2>
                             <p className="text-gray-300 mb-6 text-lg">{error}</p>
@@ -384,12 +458,12 @@
             return (
                 <div className="min-h-screen bg-dark p-6">
                     {/* Header */}
-                    <div className="bg-dark-card rounded-xl shadow-2xl p-8 mb-6 border-2 border-dark">
+                    <div className="bg-dark-card rounded-xl shadow-2xl p-8 mb-6 border border-dark">
                         <div className="flex justify-between items-center">
                             <div>
                                 <h1 className="text-5xl font-bold text-gray-100 mb-2">🚗 POPTOP Fleet Tracker</h1>
-                                <p className="text-xl text-dark-muted">Dark Edition - Active Vehicles Only</p>
-                                <p className="text-lg text-blue-400 mt-2">
+                                <p className="text-xl text-dark-muted">Natural Dark Theme - Active Vehicles</p>
+                                <p className="text-lg" style={{color: '#58a6ff'}} className="mt-2">
                                     Showing data from Nov 13, 9:17 AM onwards
                                 </p>
                                 {stats && (
@@ -433,21 +507,21 @@
                         {/* Main Column - Map */}
                         <div className="lg:col-span-2 space-y-6">
                             {/* Map */}
-                            <div className="bg-dark-card rounded-xl shadow-2xl p-6 border-2 border-dark">
+                            <div className="bg-dark-card rounded-xl shadow-2xl p-6 border border-dark">
                                 <h2 className="text-3xl font-bold mb-5 text-gray-100">📍 Live Location - {selectedVehicle?.name}</h2>
-                                <div ref={mapRef} style={{ height: '450px' }}></div>
+                                <div ref={mapRef} style={{ height: '450px', width: '100%' }}></div>
                             </div>
 
                             {/* Comprehensive Telemetry */}
                             {currentData && (
-                                <div className="bg-dark-card rounded-xl shadow-2xl p-8 border-2 border-dark">
+                                <div className="bg-dark-card rounded-xl shadow-2xl p-8 border border-dark">
                                     <div className="flex justify-between items-center mb-6">
                                         <h2 className="text-3xl font-bold text-gray-100">
                                             📊 Complete Telemetry ({totalIOElements} Elements)
                                         </h2>
                                         <button
                                             onClick={() => setShowAllIO(!showAllIO)}
-                                            className="btn-primary text-md"
+                                            className="btn-secondary text-md"
                                         >
                                             {showAllIO ? '👁️ Show Less' : '👁️ Show All IO'}
                                         </button>
@@ -455,7 +529,7 @@
 
                                     {/* Power & Battery */}
                                     <div className="mb-8">
-                                        <h3 className="text-2xl font-semibold text-red-400 mb-4">⚡ Power & Battery ({categories.power.length})</h3>
+                                        <h3 className="text-2xl font-semibold mb-4" style={{color: '#d97a7a'}}>⚡ Power & Battery ({categories.power.length})</h3>
                                         <div className="telemetry-grid">
                                             {categories.power.map(item => renderIOElement(item.key, item.data, item.category))}
                                         </div>
@@ -463,7 +537,7 @@
 
                                     {/* Vehicle Status */}
                                     <div className="mb-8">
-                                        <h3 className="text-2xl font-semibold text-blue-400 mb-4">🚗 Vehicle Status ({categories.vehicle.length})</h3>
+                                        <h3 className="text-2xl font-semibold mb-4" style={{color: '#7ab0d9'}}>🚗 Vehicle Status ({categories.vehicle.length})</h3>
                                         <div className="telemetry-grid">
                                             {categories.vehicle.map(item => renderIOElement(item.key, item.data, item.category))}
                                         </div>
@@ -471,7 +545,7 @@
 
                                     {/* OBD-II Data */}
                                     <div className="mb-8">
-                                        <h3 className="text-2xl font-semibold text-green-400 mb-4">🔧 OBD-II Data ({categories.obd.length})</h3>
+                                        <h3 className="text-2xl font-semibold mb-4" style={{color: '#7ad9b0'}}>🔧 OBD-II Data ({categories.obd.length})</h3>
                                         <div className="telemetry-grid">
                                             {categories.obd.map(item => renderIOElement(item.key, item.data, item.category))}
                                         </div>
@@ -479,7 +553,7 @@
 
                                     {/* Cellular Network */}
                                     <div className="mb-8">
-                                        <h3 className="text-2xl font-semibold text-orange-400 mb-4">📱 Cellular Network ({categories.network.length})</h3>
+                                        <h3 className="text-2xl font-semibold mb-4" style={{color: '#d9c27a'}}>📱 Cellular Network ({categories.network.length})</h3>
                                         <div className="telemetry-grid">
                                             {categories.network.map(item => renderIOElement(item.key, item.data, item.category))}
                                         </div>
@@ -487,7 +561,7 @@
 
                                     {/* GPS/GNSS */}
                                     <div className="mb-8">
-                                        <h3 className="text-2xl font-semibold text-purple-400 mb-4">🛰️ GPS/GNSS ({categories.gps.length})</h3>
+                                        <h3 className="text-2xl font-semibold mb-4" style={{color: '#b07ad9'}}>🛰️ GPS/GNSS ({categories.gps.length})</h3>
                                         <div className="telemetry-grid">
                                             {categories.gps.map(item => renderIOElement(item.key, item.data, item.category))}
                                         </div>
@@ -503,11 +577,11 @@
                                         </div>
                                     )}
 
-                                    <div className="mt-8 p-6 bg-dark rounded-xl text-md text-dark-muted border-2 border-dark">
+                                    <div className="mt-8 p-6 bg-dark rounded-xl text-md text-dark-muted border border-dark">
                                         <strong className="text-gray-300">Last Update:</strong> {new Date(currentData.timestamp).toLocaleString()}<br/>
                                         <strong className="text-gray-300">Vehicle:</strong> {selectedVehicle?.name} ({selectedVehicle?.vin})<br/>
                                         <strong className="text-gray-300">Data Source:</strong> Timescale Cloud via Lambda<br/>
-                                        <strong className="text-green-400">✅ All IO elements captured and displayed</strong>
+                                        <strong style={{color: '#3fb950'}}>✅ All IO elements captured and displayed</strong>
                                     </div>
                                 </div>
                             )}
@@ -515,9 +589,9 @@
 
                         {/* Right Column - Trips */}
                         <div className="space-y-6">
-                            <div className="bg-dark-card rounded-xl shadow-2xl p-8 border-2 border-dark">
+                            <div className="bg-dark-card rounded-xl shadow-2xl p-8 border border-dark">
                                 <h2 className="text-3xl font-bold mb-6 text-gray-100">📋 Trip History</h2>
-                                <p className="text-md text-blue-400 mb-5">Since Nov 13, 9:17 AM</p>
+                                <p className="text-md mb-5" style={{color: '#58a6ff'}}>Since Nov 13, 9:17 AM</p>
                                 
                                 {trips.length === 0 ? (
                                     <div className="text-center text-dark-muted py-12">
@@ -537,7 +611,7 @@
                                                         🚗 Trip #{trip.id}
                                                     </div>
                                                     {trip.ongoing && (
-                                                        <span className="px-3 py-1 text-sm bg-green-600 text-white rounded-lg font-semibold">
+                                                        <span className="px-3 py-1 text-sm font-semibold rounded-lg" style={{backgroundColor: '#238636', color: 'white'}}>
                                                             ⏱️ Live
                                                         </span>
                                                     )}
@@ -558,15 +632,15 @@
                                                     </div>
                                                     <div className="flex items-center gap-2">
                                                         <span className="text-lg">📍</span>
-                                                        <span className="font-semibold text-blue-400">{trip.distance.toFixed(2)} km</span>
+                                                        <span className="font-semibold" style={{color: '#58a6ff'}}>{trip.distance.toFixed(2)} km</span>
                                                     </div>
                                                     <div className="flex items-center gap-2">
                                                         <span className="text-lg">🚀</span>
-                                                        <span>Max: <strong className="text-red-400">{trip.max_speed.toFixed(0)} km/h</strong></span>
+                                                        <span>Max: <strong style={{color: '#f85149'}}>{trip.max_speed.toFixed(0)} km/h</strong></span>
                                                     </div>
                                                     <div className="flex items-center gap-2">
                                                         <span className="text-lg">📊</span>
-                                                        <span>Avg: <strong className="text-green-400">{trip.avg_speed.toFixed(0)} km/h</strong></span>
+                                                        <span>Avg: <strong style={{color: '#3fb950'}}>{trip.avg_speed.toFixed(0)} km/h</strong></span>
                                                     </div>
                                                     {trip.vin && trip.vin !== 'Unknown' && (
                                                         <div className="text-sm bg-dark px-3 py-2 rounded-lg mt-3 border border-dark">
