@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>POPTOP Fleet Tracker - Enhanced Telemetry</title>
+    <title>POPTOP Fleet Tracker - Dark Edition</title>
     <script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
     <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
     <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
@@ -11,31 +11,128 @@
     <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
     <script src="https://cdn.tailwindcss.com"></script>
     <style>
+        body {
+            background-color: #0a0e17;
+            color: #e2e8f0;
+        }
         .leaflet-container {
             height: 100%;
             width: 100%;
-            border-radius: 0.5rem;
+            border-radius: 0.75rem;
+            border: 2px solid #1e293b;
         }
         .telemetry-grid {
             display: grid;
-            grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
-            gap: 0.75rem;
+            grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+            gap: 1rem;
         }
         .telemetry-card {
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-            border-radius: 0.5rem;
-            padding: 0.75rem;
+            background: linear-gradient(135deg, #1e293b 0%, #334155 100%);
+            border-radius: 0.75rem;
+            padding: 1.25rem;
             color: white;
-            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+            box-shadow: 0 4px 6px rgba(0,0,0,0.4);
+            border: 1px solid #334155;
+            transition: transform 0.2s, box-shadow 0.2s;
         }
-        .telemetry-card.power { background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%); }
-        .telemetry-card.vehicle { background: linear-gradient(135deg, #4facfe 0%, #00f2fe 100%); }
-        .telemetry-card.obd { background: linear-gradient(135deg, #43e97b 0%, #38f9d7 100%); }
-        .telemetry-card.network { background: linear-gradient(135deg, #fa709a 0%, #fee140 100%); }
-        .telemetry-card.gps { background: linear-gradient(135deg, #30cfd0 0%, #330867 100%); }
+        .telemetry-card:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 6px 12px rgba(0,0,0,0.6);
+        }
+        .telemetry-card.power { 
+            background: linear-gradient(135deg, #991b1b 0%, #dc2626 100%); 
+            border-color: #dc2626;
+        }
+        .telemetry-card.vehicle { 
+            background: linear-gradient(135deg, #1e40af 0%, #3b82f6 100%); 
+            border-color: #3b82f6;
+        }
+        .telemetry-card.obd { 
+            background: linear-gradient(135deg, #065f46 0%, #10b981 100%); 
+            border-color: #10b981;
+        }
+        .telemetry-card.network { 
+            background: linear-gradient(135deg, #7c2d12 0%, #f97316 100%); 
+            border-color: #f97316;
+        }
+        .telemetry-card.gps { 
+            background: linear-gradient(135deg, #4c1d95 0%, #8b5cf6 100%); 
+            border-color: #8b5cf6;
+        }
+        .card-label {
+            font-size: 0.875rem;
+            opacity: 0.9;
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+        }
+        .card-value {
+            font-size: 2rem;
+            font-weight: 700;
+            margin-top: 0.5rem;
+            text-shadow: 0 2px 4px rgba(0,0,0,0.3);
+        }
+        .bg-dark {
+            background-color: #0f172a;
+        }
+        .bg-dark-card {
+            background-color: #1e293b;
+        }
+        .border-dark {
+            border-color: #334155;
+        }
+        .text-dark-muted {
+            color: #94a3b8;
+        }
+        .trip-card {
+            background: linear-gradient(135deg, #1e293b 0%, #334155 100%);
+            border: 2px solid #475569;
+            border-radius: 0.75rem;
+            padding: 1.25rem;
+            transition: all 0.2s;
+        }
+        .trip-card:hover {
+            border-color: #3b82f6;
+            box-shadow: 0 4px 12px rgba(59, 130, 246, 0.3);
+        }
+        .btn-primary {
+            background: linear-gradient(135deg, #2563eb 0%, #1d4ed8 100%);
+            border: none;
+            padding: 0.75rem 1.5rem;
+            border-radius: 0.5rem;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+        .btn-primary:hover {
+            background: linear-gradient(135deg, #1d4ed8 0%, #1e40af 100%);
+            box-shadow: 0 4px 12px rgba(37, 99, 235, 0.4);
+        }
+        select {
+            background-color: #1e293b;
+            color: #e2e8f0;
+            border: 2px solid #334155;
+            padding: 0.75rem 1rem;
+            border-radius: 0.5rem;
+            font-weight: 600;
+            cursor: pointer;
+        }
+        select:focus {
+            outline: none;
+            border-color: #3b82f6;
+            box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
+        }
+        .leaflet-popup-content-wrapper {
+            background: #1e293b;
+            color: #e2e8f0;
+            border-radius: 0.5rem;
+        }
+        .leaflet-popup-tip {
+            background: #1e293b;
+        }
     </style>
 </head>
-<body class="bg-gray-100">
+<body class="bg-dark">
     <div id="root"></div>
 
     <script type="text/babel">
@@ -45,15 +142,22 @@
         const API_BASE_URL = window.location.hostname === 'localhost' 
             ? 'http://localhost:5000/api'
             : `${window.location.protocol}//${window.location.host}/api`;
-        const DEFAULT_IMEI = '862464068525406';  // Device #1 (Sprinter)
+        
+        // ONLY SHOW LEXUS AND TOYOTA - Filter data from Nov 13, 9:17 AM onwards
+        const ACTIVE_VEHICLES = [
+            { imei: '862464068525638', name: '2015 Lexus NX', vin: '2T2BK1BA5FC336915' },
+            { imei: '862464068511489', name: '2008 Toyota', vin: '5TELU42N88Z495934' }
+        ];
+        const DEFAULT_IMEI = '862464068525638'; // Lexus
+        
+        // Data cutoff: November 13, 2025 at 9:17 AM PST
+        const DATA_CUTOFF = new Date('2025-11-13T09:17:00-08:00').getTime();
 
         const FleetDashboard = () => {
             const [currentData, setCurrentData] = useState(null);
             const [trips, setTrips] = useState([]);
             const [stats, setStats] = useState(null);
-            const [devices, setDevices] = useState([]);
             const [selectedIMEI, setSelectedIMEI] = useState(DEFAULT_IMEI);
-            const [selectedTrip, setSelectedTrip] = useState(null);
             const [autoRefresh, setAutoRefresh] = useState(true);
             const [loading, setLoading] = useState(true);
             const [error, setError] = useState(null);
@@ -61,6 +165,12 @@
             const mapRef = useRef(null);
             const mapInstanceRef = useRef(null);
             const markersRef = useRef([]);
+
+            // Filter function to only show data after cutoff
+            const filterDataByCutoff = (data) => {
+                if (!data || !data.timestamp) return false;
+                return data.timestamp >= DATA_CUTOFF;
+            };
 
             // Load data
             useEffect(() => {
@@ -76,29 +186,27 @@
                 try {
                     setError(null);
                     
-                    // Load devices list
-                    const devicesRes = await fetch(`${API_BASE_URL}/devices`);
-                    if (devicesRes.ok) {
-                        const devicesData = await devicesRes.json();
-                        setDevices(devicesData.devices || []);
-                    }
-                    
                     // Load latest data
                     const latestRes = await fetch(`${API_BASE_URL}/latest/${selectedIMEI}`);
                     if (latestRes.ok) {
                         const latestData = await latestRes.json();
-                        setCurrentData(latestData.data);
+                        if (filterDataByCutoff(latestData.data)) {
+                            setCurrentData(latestData.data);
+                        }
                     }
                     
-                    // Load trips
-                    const tripsRes = await fetch(`${API_BASE_URL}/trips/${selectedIMEI}?hours=168`);
+                    // Load trips (only after cutoff)
+                    const tripsRes = await fetch(`${API_BASE_URL}/trips/${selectedIMEI}?hours=72`);
                     if (tripsRes.ok) {
                         const tripsData = await tripsRes.json();
-                        setTrips(tripsData.trips || []);
+                        const filteredTrips = (tripsData.trips || []).filter(trip => 
+                            trip.start_time >= DATA_CUTOFF
+                        );
+                        setTrips(filteredTrips);
                     }
                     
-                    // Load stats
-                    const statsRes = await fetch(`${API_BASE_URL}/stats/${selectedIMEI}?hours=168`);
+                    // Load stats (only from Nov 13, 9:17 AM onwards)
+                    const statsRes = await fetch(`${API_BASE_URL}/stats/${selectedIMEI}?hours=72`);
                     if (statsRes.ok) {
                         const statsData = await statsRes.json();
                         setStats(statsData);
@@ -120,7 +228,8 @@
                     
                     L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
                         attribution: '© OpenStreetMap contributors',
-                        maxZoom: 19
+                        maxZoom: 19,
+                        className: 'dark-tiles'
                     }).addTo(mapInstanceRef.current);
                 }
             }, []);
@@ -139,19 +248,20 @@
                 if (!lat || !lon) return;
 
                 const ignitionOn = currentData.io.ignition?.value === 1;
-                const markerColor = ignitionOn ? '#22c55e' : '#ef4444';
+                const markerColor = ignitionOn ? '#10b981' : '#ef4444';
+                
+                const vehicleName = ACTIVE_VEHICLES.find(v => v.imei === selectedIMEI)?.name || selectedIMEI;
                 
                 const marker = L.marker([lat, lon], {
                     icon: L.divIcon({
                         className: 'custom-div-icon',
-                        html: `<div style='background-color:${markerColor};width:32px;height:32px;border-radius:50%;border:4px solid white;box-shadow:0 3px 8px rgba(0,0,0,0.4);'></div>`,
-                        iconSize: [32, 32]
+                        html: `<div style='background-color:${markerColor};width:40px;height:40px;border-radius:50%;border:4px solid white;box-shadow:0 4px 12px rgba(0,0,0,0.6);'></div>`,
+                        iconSize: [40, 40]
                     })
                 }).addTo(map).bindPopup(`
-                    <div style="font-family: sans-serif;">
-                        <strong>Current Location</strong><br/>
-                        <div style="margin-top: 8px;">
-                            <strong>IMEI:</strong> ${selectedIMEI}<br/>
+                    <div style="font-family: sans-serif; padding: 8px;">
+                        <strong style="font-size: 1.1em;">${vehicleName}</strong><br/>
+                        <div style="margin-top: 12px; line-height: 1.8;">
                             <strong>Speed:</strong> ${currentData.gps.speed_kmh.toFixed(1)} km/h<br/>
                             <strong>Satellites:</strong> ${currentData.gps.satellites}<br/>
                             <strong>Ignition:</strong> ${ignitionOn ? '🟢 ON' : '🔴 OFF'}<br/>
@@ -196,8 +306,8 @@
                 
                 return (
                     <div key={key} className={`telemetry-card ${category}`}>
-                        <div className="text-xs opacity-75 truncate">{description}</div>
-                        <div className="text-2xl font-bold mt-1">{displayValue}</div>
+                        <div className="card-label">{description}</div>
+                        <div className="card-value">{displayValue}</div>
                     </div>
                 );
             };
@@ -235,11 +345,11 @@
 
             if (loading) {
                 return (
-                    <div className="min-h-screen bg-gray-100 flex items-center justify-center">
+                    <div className="min-h-screen bg-dark flex items-center justify-center">
                         <div className="text-center">
-                            <div className="text-5xl mb-4">🚗</div>
-                            <div className="text-2xl font-bold text-gray-700">Loading POPTOP Dashboard...</div>
-                            <div className="text-sm text-gray-500 mt-2">Connecting to Timescale Cloud</div>
+                            <div className="text-6xl mb-6">🚗</div>
+                            <div className="text-3xl font-bold text-gray-100 mb-3">Loading POPTOP Dashboard...</div>
+                            <div className="text-lg text-dark-muted">Connecting to Timescale Cloud</div>
                         </div>
                     </div>
                 );
@@ -247,20 +357,20 @@
 
             if (error && !currentData) {
                 return (
-                    <div className="min-h-screen bg-gray-100 flex items-center justify-center">
-                        <div className="bg-white rounded-lg shadow-lg p-8 max-w-md">
-                            <div className="text-red-500 text-5xl mb-4">⚠️</div>
-                            <h2 className="text-2xl font-bold text-gray-800 mb-2">Connection Error</h2>
-                            <p className="text-gray-600 mb-4">{error}</p>
-                            <p className="text-sm text-gray-500 mb-4">
+                    <div className="min-h-screen bg-dark flex items-center justify-center">
+                        <div className="bg-dark-card rounded-xl shadow-2xl p-10 max-w-md border-2 border-dark">
+                            <div className="text-red-500 text-6xl mb-6">⚠️</div>
+                            <h2 className="text-3xl font-bold text-gray-100 mb-4">Connection Error</h2>
+                            <p className="text-gray-300 mb-6 text-lg">{error}</p>
+                            <p className="text-sm text-dark-muted mb-6">
                                 Make sure the API server is running:<br/>
-                                <code className="bg-gray-100 px-2 py-1 rounded block mt-2">python api_server_NEW.py</code>
+                                <code className="bg-dark px-3 py-2 rounded block mt-3 text-blue-400">python api_server_NEW.py</code>
                             </p>
                             <button
                                 onClick={loadAllData}
-                                className="px-6 py-3 bg-blue-500 text-white rounded-lg hover:bg-blue-600 transition font-semibold"
+                                className="btn-primary w-full text-lg"
                             >
-                                Retry Connection
+                                🔄 Retry Connection
                             </button>
                         </div>
                     </div>
@@ -269,45 +379,49 @@
 
             const categories = categorizeIOElements();
             const totalIOElements = currentData ? Object.keys(currentData.io).length : 0;
+            const selectedVehicle = ACTIVE_VEHICLES.find(v => v.imei === selectedIMEI);
 
             return (
-                <div className="min-h-screen bg-gray-100 p-4">
+                <div className="min-h-screen bg-dark p-6">
                     {/* Header */}
-                    <div className="bg-white rounded-lg shadow-md p-6 mb-4">
+                    <div className="bg-dark-card rounded-xl shadow-2xl p-8 mb-6 border-2 border-dark">
                         <div className="flex justify-between items-center">
                             <div>
-                                <h1 className="text-4xl font-bold text-gray-800">🚗 POPTOP Fleet Tracker</h1>
-                                <p className="text-gray-600 mt-1">Enhanced Telemetry Dashboard - All {totalIOElements} IO Elements</p>
+                                <h1 className="text-5xl font-bold text-gray-100 mb-2">🚗 POPTOP Fleet Tracker</h1>
+                                <p className="text-xl text-dark-muted">Dark Edition - Active Vehicles Only</p>
+                                <p className="text-lg text-blue-400 mt-2">
+                                    Showing data from Nov 13, 9:17 AM onwards
+                                </p>
                                 {stats && (
-                                    <p className="text-sm text-gray-500 mt-2">
-                                        Last 7 days: {stats.total_records} records · {stats.total_distance_km.toFixed(1)} km · Max {stats.max_speed_kmh.toFixed(0)} km/h
+                                    <p className="text-md text-dark-muted mt-3">
+                                        📊 {stats.total_records} records · 📍 {stats.total_distance_km.toFixed(1)} km · 🚀 Max {stats.max_speed_kmh.toFixed(0)} km/h
                                     </p>
                                 )}
                             </div>
-                            <div className="flex items-center gap-4">
+                            <div className="flex items-center gap-5">
                                 <select
                                     value={selectedIMEI}
                                     onChange={(e) => setSelectedIMEI(e.target.value)}
-                                    className="px-4 py-2 border border-gray-300 rounded-lg"
+                                    className="text-lg"
                                 >
-                                    {devices.map(device => (
-                                        <option key={device.imei} value={device.imei}>
-                                            {device.imei} ({device.vin})
+                                    {ACTIVE_VEHICLES.map(vehicle => (
+                                        <option key={vehicle.imei} value={vehicle.imei}>
+                                            {vehicle.name}
                                         </option>
                                     ))}
                                 </select>
-                                <label className="flex items-center gap-2 cursor-pointer">
+                                <label className="flex items-center gap-3 cursor-pointer">
                                     <input
                                         type="checkbox"
                                         checked={autoRefresh}
                                         onChange={(e) => setAutoRefresh(e.target.checked)}
-                                        className="w-4 h-4"
+                                        className="w-5 h-5"
                                     />
-                                    <span className="text-sm text-gray-700">Auto-refresh (5s)</span>
+                                    <span className="text-md text-gray-300 font-semibold">Auto-refresh (5s)</span>
                                 </label>
                                 <button
                                     onClick={loadAllData}
-                                    className="px-4 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600 transition font-semibold"
+                                    className="btn-primary"
                                 >
                                     🔄 Refresh
                                 </button>
@@ -315,128 +429,148 @@
                         </div>
                     </div>
 
-                    <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
+                    <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
                         {/* Main Column - Map */}
-                        <div className="lg:col-span-2 space-y-4">
+                        <div className="lg:col-span-2 space-y-6">
                             {/* Map */}
-                            <div className="bg-white rounded-lg shadow-md p-4">
-                                <h2 className="text-2xl font-bold mb-4 text-gray-800">📍 Live Location</h2>
-                                <div ref={mapRef} style={{ height: '400px' }}></div>
+                            <div className="bg-dark-card rounded-xl shadow-2xl p-6 border-2 border-dark">
+                                <h2 className="text-3xl font-bold mb-5 text-gray-100">📍 Live Location - {selectedVehicle?.name}</h2>
+                                <div ref={mapRef} style={{ height: '450px' }}></div>
                             </div>
 
-                            {/* Comprehensive Telemetry - ALL 53 IO Elements */}
+                            {/* Comprehensive Telemetry */}
                             {currentData && (
-                                <div className="bg-white rounded-lg shadow-md p-6">
-                                    <div className="flex justify-between items-center mb-4">
-                                        <h2 className="text-2xl font-bold text-gray-800">
-                                            📊 Complete Telemetry ({totalIOElements} IO Elements)
+                                <div className="bg-dark-card rounded-xl shadow-2xl p-8 border-2 border-dark">
+                                    <div className="flex justify-between items-center mb-6">
+                                        <h2 className="text-3xl font-bold text-gray-100">
+                                            📊 Complete Telemetry ({totalIOElements} Elements)
                                         </h2>
                                         <button
                                             onClick={() => setShowAllIO(!showAllIO)}
-                                            className="px-4 py-2 bg-purple-500 text-white rounded-lg hover:bg-purple-600 transition text-sm"
+                                            className="btn-primary text-md"
                                         >
-                                            {showAllIO ? 'Show Less' : 'Show All IO'}
+                                            {showAllIO ? '👁️ Show Less' : '👁️ Show All IO'}
                                         </button>
                                     </div>
 
                                     {/* Power & Battery */}
-                                    <div className="mb-6">
-                                        <h3 className="text-lg font-semibold text-gray-700 mb-3">⚡ Power & Battery ({categories.power.length})</h3>
+                                    <div className="mb-8">
+                                        <h3 className="text-2xl font-semibold text-red-400 mb-4">⚡ Power & Battery ({categories.power.length})</h3>
                                         <div className="telemetry-grid">
                                             {categories.power.map(item => renderIOElement(item.key, item.data, item.category))}
                                         </div>
                                     </div>
 
                                     {/* Vehicle Status */}
-                                    <div className="mb-6">
-                                        <h3 className="text-lg font-semibold text-gray-700 mb-3">🚗 Vehicle Status ({categories.vehicle.length})</h3>
+                                    <div className="mb-8">
+                                        <h3 className="text-2xl font-semibold text-blue-400 mb-4">🚗 Vehicle Status ({categories.vehicle.length})</h3>
                                         <div className="telemetry-grid">
                                             {categories.vehicle.map(item => renderIOElement(item.key, item.data, item.category))}
                                         </div>
                                     </div>
 
                                     {/* OBD-II Data */}
-                                    <div className="mb-6">
-                                        <h3 className="text-lg font-semibold text-gray-700 mb-3">🔧 OBD-II Data ({categories.obd.length})</h3>
+                                    <div className="mb-8">
+                                        <h3 className="text-2xl font-semibold text-green-400 mb-4">🔧 OBD-II Data ({categories.obd.length})</h3>
                                         <div className="telemetry-grid">
                                             {categories.obd.map(item => renderIOElement(item.key, item.data, item.category))}
                                         </div>
                                     </div>
 
                                     {/* Cellular Network */}
-                                    <div className="mb-6">
-                                        <h3 className="text-lg font-semibold text-gray-700 mb-3">📱 Cellular Network ({categories.network.length})</h3>
+                                    <div className="mb-8">
+                                        <h3 className="text-2xl font-semibold text-orange-400 mb-4">📱 Cellular Network ({categories.network.length})</h3>
                                         <div className="telemetry-grid">
                                             {categories.network.map(item => renderIOElement(item.key, item.data, item.category))}
                                         </div>
                                     </div>
 
                                     {/* GPS/GNSS */}
-                                    <div className="mb-6">
-                                        <h3 className="text-lg font-semibold text-gray-700 mb-3">🛰️ GPS/GNSS ({categories.gps.length})</h3>
+                                    <div className="mb-8">
+                                        <h3 className="text-2xl font-semibold text-purple-400 mb-4">🛰️ GPS/GNSS ({categories.gps.length})</h3>
                                         <div className="telemetry-grid">
                                             {categories.gps.map(item => renderIOElement(item.key, item.data, item.category))}
                                         </div>
                                     </div>
 
-                                    {/* Other Elements (shown when "Show All IO" is enabled) */}
+                                    {/* Other Elements */}
                                     {showAllIO && categories.other.length > 0 && (
-                                        <div className="mb-6">
-                                            <h3 className="text-lg font-semibold text-gray-700 mb-3">📋 Other Elements ({categories.other.length})</h3>
+                                        <div className="mb-8">
+                                            <h3 className="text-2xl font-semibold text-gray-400 mb-4">📋 Other Elements ({categories.other.length})</h3>
                                             <div className="telemetry-grid">
                                                 {categories.other.map(item => renderIOElement(item.key, item.data, 'other'))}
                                             </div>
                                         </div>
                                     )}
 
-                                    <div className="mt-6 p-4 bg-gray-50 rounded-lg text-sm text-gray-600">
-                                        <strong>Last Update:</strong> {new Date(currentData.timestamp).toLocaleString()}<br/>
-                                        <strong>Data Source:</strong> Timescale Cloud (Direct MQTT Connection)<br/>
-                                        <strong>All IO elements are being captured and displayed above! ✅</strong>
+                                    <div className="mt-8 p-6 bg-dark rounded-xl text-md text-dark-muted border-2 border-dark">
+                                        <strong className="text-gray-300">Last Update:</strong> {new Date(currentData.timestamp).toLocaleString()}<br/>
+                                        <strong className="text-gray-300">Vehicle:</strong> {selectedVehicle?.name} ({selectedVehicle?.vin})<br/>
+                                        <strong className="text-gray-300">Data Source:</strong> Timescale Cloud via Lambda<br/>
+                                        <strong className="text-green-400">✅ All IO elements captured and displayed</strong>
                                     </div>
                                 </div>
                             )}
                         </div>
 
                         {/* Right Column - Trips */}
-                        <div className="space-y-4">
-                            <div className="bg-white rounded-lg shadow-md p-6">
-                                <h2 className="text-2xl font-bold mb-4 text-gray-800">📋 Trip History</h2>
+                        <div className="space-y-6">
+                            <div className="bg-dark-card rounded-xl shadow-2xl p-8 border-2 border-dark">
+                                <h2 className="text-3xl font-bold mb-6 text-gray-100">📋 Trip History</h2>
+                                <p className="text-md text-blue-400 mb-5">Since Nov 13, 9:17 AM</p>
                                 
                                 {trips.length === 0 ? (
-                                    <div className="text-center text-gray-500 py-8">
-                                        <div className="text-5xl mb-3">🚗</div>
-                                        <div className="font-semibold">No trips recorded yet</div>
-                                        <div className="text-sm mt-2">Drive with ignition on to start tracking!</div>
+                                    <div className="text-center text-dark-muted py-12">
+                                        <div className="text-6xl mb-4">🚗</div>
+                                        <div className="font-semibold text-xl">No trips recorded yet</div>
+                                        <div className="text-md mt-3">Drive with ignition on to start tracking!</div>
                                     </div>
                                 ) : (
-                                    <div className="space-y-3 max-h-[800px] overflow-y-auto pr-2">
+                                    <div className="space-y-4 max-h-[900px] overflow-y-auto pr-3">
                                         {trips.map((trip) => (
                                             <div
                                                 key={trip.id}
-                                                className="p-4 rounded-lg border-2 border-gray-200 hover:border-blue-300 bg-white hover:shadow transition cursor-pointer"
+                                                className="trip-card"
                                             >
-                                                <div className="flex justify-between items-start mb-2">
-                                                    <div className="font-bold text-gray-800">
+                                                <div className="flex justify-between items-start mb-3">
+                                                    <div className="font-bold text-gray-100 text-xl">
                                                         🚗 Trip #{trip.id}
                                                     </div>
                                                     {trip.ongoing && (
-                                                        <span className="px-2 py-1 text-xs bg-green-100 text-green-800 rounded font-medium">
+                                                        <span className="px-3 py-1 text-sm bg-green-600 text-white rounded-lg font-semibold">
                                                             ⏱️ Live
                                                         </span>
                                                     )}
                                                 </div>
                                                 
-                                                <div className="text-sm text-gray-600 space-y-1">
-                                                    <div>📅 {new Date(trip.start_time).toLocaleDateString()}</div>
-                                                    <div>🕐 {new Date(trip.start_time).toLocaleTimeString()}</div>
-                                                    <div>⏱️ {formatDuration(trip.duration_ms)}</div>
-                                                    <div>📍 {trip.distance.toFixed(2)} km</div>
-                                                    <div>🚀 Max: {trip.max_speed.toFixed(0)} km/h</div>
-                                                    <div>📊 Avg: {trip.avg_speed.toFixed(0)} km/h</div>
+                                                <div className="text-md text-gray-300 space-y-2">
+                                                    <div className="flex items-center gap-2">
+                                                        <span className="text-lg">📅</span>
+                                                        <span>{new Date(trip.start_time).toLocaleDateString()}</span>
+                                                    </div>
+                                                    <div className="flex items-center gap-2">
+                                                        <span className="text-lg">🕐</span>
+                                                        <span>{new Date(trip.start_time).toLocaleTimeString()}</span>
+                                                    </div>
+                                                    <div className="flex items-center gap-2">
+                                                        <span className="text-lg">⏱️</span>
+                                                        <span className="font-semibold">{formatDuration(trip.duration_ms)}</span>
+                                                    </div>
+                                                    <div className="flex items-center gap-2">
+                                                        <span className="text-lg">📍</span>
+                                                        <span className="font-semibold text-blue-400">{trip.distance.toFixed(2)} km</span>
+                                                    </div>
+                                                    <div className="flex items-center gap-2">
+                                                        <span className="text-lg">🚀</span>
+                                                        <span>Max: <strong className="text-red-400">{trip.max_speed.toFixed(0)} km/h</strong></span>
+                                                    </div>
+                                                    <div className="flex items-center gap-2">
+                                                        <span className="text-lg">📊</span>
+                                                        <span>Avg: <strong className="text-green-400">{trip.avg_speed.toFixed(0)} km/h</strong></span>
+                                                    </div>
                                                     {trip.vin && trip.vin !== 'Unknown' && (
-                                                        <div className="text-xs bg-gray-100 px-2 py-1 rounded mt-2">
-                                                            VIN: {trip.vin}
+                                                        <div className="text-sm bg-dark px-3 py-2 rounded-lg mt-3 border border-dark">
+                                                            <strong>VIN:</strong> {trip.vin}
                                                         </div>
                                                     )}
                                                 </div>
